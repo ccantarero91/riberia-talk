@@ -1,17 +1,16 @@
 # Ribería talk
 
-Charla sobre **Ribería**: recomendación de vinos con RAG (pgvector + embeddings) y lectura de cartas con un modelo de visión, todo en Scala.
+Talk about **Ribería**: wine recommendations with RAG (pgvector + embeddings) and reading wine lists with a vision model, all in Scala.
 
-- `modules/talk`: slides en markdown, presentadas con [reveal.js](https://revealjs.com/) y procesadas con [`mdoc`](https://scalameta.org/mdoc/)
-- `modules/code`: código Scala de la demo, compilado en CI para que los snippets de las slides no se pudran
+- `modules/talk`: slides written in markdown, presented with [reveal.js](https://revealjs.com/) and processed with [`mdoc`](https://scalameta.org/mdoc/)
+- `modules/code`: the Scala code behind the demo, compiled in CI so the slide snippets don't rot
 
-## Compilar las slides
+## Build the slides
 
-1. Instala [`sbt`](https://www.scala-sbt.org/) y Java 21
-2. `sbt mdoc`
-3. Sirve `modules/talk/target/mdoc` (el `index.html`), p. ej. con [`livereload`](https://github.com/lepture/python-livereload)
+1. Install [`sbt`](https://www.scala-sbt.org/) and Java 21
+2. Run `sbt mdoc`
+3. Serve `modules/talk/target/mdoc` (the `index.html`), e.g. with [`livereload`](https://github.com/lepture/python-livereload)
 
-## Publicación
+## Publishing
 
-Cada push a `main` compila y publica en la rama `gh-pages` (workflow `.github/workflows/ci.yml`).
-Activa Pages en *Settings → Pages → Deploy from branch → `gh-pages` / root* tras el primer despliegue.
+Every push to `main` compiles everything and publishes to the `gh-pages` branch (workflow `.github/workflows/ci.yml`).

@@ -1,82 +1,82 @@
-## Ribería: recomendando vinos con RAG en Scala
+## Ribería: wine recommendations with RAG in Scala
 ---
-- ¿Quién? Cristian Cantarero
-- ¿Qué? Un bot que lee la carta de vinos de una foto y te recomienda según tu gusto
-- ¿Cómo? Scala + Postgres/pgvector + Ollama
+- Who? Cristian Cantarero
+- What? A bot that reads a wine list from a photo and recommends what to order based on your taste
+- How? Scala + Postgres/pgvector + Ollama
 
 Note:
-- Presentación rápida
-- Idea: haces una foto a la carta del restaurante y el bot te dice qué pedir
-- Todo el backend en Scala: smithy4s, http4s y un bot de Telegram
+- Quick intro
+- The idea: you take a photo of the restaurant's wine list and the bot tells you what to order
+- The whole backend is Scala: smithy4s, http4s and a Telegram bot
 
 
 
-### ¿Qué es un RAG?
+### What is a RAG?
 <!-- gif -->
 ---
 **Retrieval-Augmented Generation**
-- El LLM no sabe nada de *tus* datos
-- Primero **recuperamos** lo relevante de nuestra base de datos
-- Después se lo damos al modelo como contexto para **generar** la respuesta
+- The LLM knows nothing about *your* data
+- First we **retrieve** what's relevant from our own database
+- Then we hand it to the model as context so it can **generate** the answer
 
 Note:
-- El modelo no conoce nuestro catálogo de vinos ni el perfil del usuario
-- En vez de reentrenar, buscamos lo relevante y se lo pasamos en el prompt
+- The model doesn't know our wine catalogue or the user's profile
+- Instead of retraining it, we look up what's relevant and put it in the prompt
 ---
-**Gatos y perros, blancos y negros**
+**Black and white cats and dogs**
 
-| | Blanco | Negro |
+| | White | Black |
 |---|---|---|
-| Gato | 🐱⚪ | 🐱⚫ |
-| Perro | 🐶⚪ | 🐶⚫ |
+| Cat | 🐱⚪ | 🐱⚫ |
+| Dog | 🐶⚪ | 🐶⚫ |
 
-- Cada cosa es un punto en un espacio: eje *animal* y eje *color*
-- "Gato blanco" está cerca de "gato negro" (mismo animal) y de "perro blanco" (mismo color)
-- Lejos de "perro negro"
+- Every item is a point in a space: an *animal* axis and a *colour* axis
+- "White cat" is close to "black cat" (same animal) and to "white dog" (same colour)
+- Far from "black dog"
 
 Note:
-- Un embedding es convertir algo en un vector de números
-- Cosas parecidas quedan cerca en ese espacio
-- Aquí solo hay 2 dimensiones; los modelos reales usan cientos o miles
+- An embedding turns something into a vector of numbers
+- Similar things end up close to each other in that space
+- Here we only have 2 dimensions; real models use hundreds or thousands
 ---
-**Llevado a vinos**
-- Ejes: tinto ↔ blanco, ligero ↔ con cuerpo, joven ↔ crianza, región...
-- "Tinto potente de Ribera" cae cerca de un Ribera crianza
-- Y lejos de un albariño joven
-- Buscar = encontrar los vinos más cercanos a lo que pide el usuario
+**Applied to wine**
+- Axes: red ↔ white, light ↔ full-bodied, young ↔ aged, region...
+- "Powerful red from Ribera" lands close to a Ribera crianza
+- And far from a young Albariño
+- Searching = finding the wines closest to what the user asks for
 
 Note:
-- Mismo concepto: el vino y la consulta se convierten en vectores
-- La recomendación es "dame los vecinos más cercanos"
+- Same idea: the wine and the query both become vectors
+- A recommendation is just "give me the nearest neighbours"
 
 
 
-### ¿Cómo implementar un RAG?
+### How to implement a RAG
 <!-- gif -->
 ---
-**Las piezas**
-1. Modelo de embeddings → texto a vector
-2. Base de datos vectorial → guardar y buscar vectores
-3. LLM → redactar la respuesta con el contexto
+**The pieces**
+1. Embedding model → text to vector
+2. Vector database → store and search vectors
+3. LLM → write the answer using that context
 
 Note:
-- No hace falta una base de datos vectorial nueva si ya tienes Postgres
+- You don't need a new vector database if you already have Postgres
 ---
-**Activar pgvector**
-- Es una extensión de Postgres: se activa con una sola línea
-- En Docker, basta con usar una imagen de Postgres que ya la incluya (`pgvector/pgvector`)
+**Enabling pgvector**
+- It's a Postgres extension: one line to enable it
+- With Docker, just use a Postgres image that already ships it (`pgvector/pgvector`)
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
 Note:
-- No hay que instalar nada más en la aplicación: la extensión añade el tipo `vector` y los operadores de distancia
+- Nothing else to install in the application: the extension adds the `vector` type and the distance operators
 ---
 **pgvector**
-- Extensión de Postgres: nuevo tipo `vector(n)`
-- Operadores de distancia e índices (HNSW / IVFFlat)
-- Seguimos con SQL, transacciones y joins de siempre
+- Postgres extension: new `vector(n)` type
+- Distance operators and indexes (HNSW / IVFFlat)
+- Still plain SQL, transactions and joins
 
 ```sql
 CREATE TABLE wines (
@@ -91,10 +91,10 @@ CREATE INDEX ON wines USING hnsw (embedding vector_cosine_ops);
 ```
 
 Note:
-- 1024 porque es la dimensión de bge-m3
-- El índice HNSW hace la búsqueda aproximada rápida
+- 1024 because that's the dimension of bge-m3
+- The HNSW index makes approximate search fast
 ---
-**Embeddings desde Scala**
+**Embeddings from Scala**
 ```scala
 final case class EmbedRequest(model: String, input: String) derives Codec.AsObject
 final case class EmbedResponse(embeddings: List[List[Float]]) derives Codec.AsObject
@@ -110,44 +110,44 @@ def embed(text: String): IO[Vector[Float]] =
 ```
 
 Note:
-- Llamada HTTP normal a Ollama con http4s + circe
-- Lo mismo sirve para indexar vinos y para la consulta del usuario
+- A plain HTTP call to Ollama with http4s + circe
+- The same function indexes the wines and embeds the user's query
 
 
 
-### ¿Qué modelo usar para embeddings?
+### Which model for embeddings?
 <!-- gif -->
 ---
-**Lo que importa**
-- Idioma: la carta y los usuarios hablan español
-- Dimensión del vector (coste de almacenamiento y búsqueda)
-- Que corra en local
+**What matters**
+- Language: not all embedding models are good outside English
+- Vector size (storage and search cost)
+- Can it run locally?
 
 Note:
-- No todos los modelos de embeddings son iguales fuera del inglés
+- Embedding models are not all equal once you leave English
 ---
-**Mi caso: nomic → bge-m3**
-- Empecé con `nomic-embed-text`: bien en inglés, flojo en español
-- Cambié a `bge-m3`: multilingüe
-- Mejores resultados con consultas en español
-- Ojo: cambiar de modelo = recalcular todos los embeddings
+**My case: nomic → bge-m3**
+- I started with `nomic-embed-text`: fine in English, weaker in Spanish
+- Switched to `bge-m3`: multilingual
+- Better results with Spanish queries
+- Careful: changing model = recomputing every embedding
 
 Note:
-- Los vectores de modelos distintos no son comparables
-- Hay que reindexar la tabla entera al migrar
+- Vectors from different models are not comparable
+- You have to reindex the whole table when you migrate
 
 
 
-### Búsqueda por embeddings con `<=>`
+### Embedding search with `<=>`
 <!-- gif -->
 ---
-**Operadores de pgvector**
-- `<->` distancia euclídea
-- `<#>` producto interno (negativo)
-- `<=>` distancia coseno ← la que usamos
+**pgvector operators**
+- `<->` Euclidean distance
+- `<#>` (negative) inner product
+- `<=>` cosine distance ← the one we use
 
 Note:
-- Coseno mide el ángulo entre vectores, no la longitud
+- Cosine measures the angle between vectors, not their length
 ---
 ```sql
 SELECT name, region, 1 - (embedding <=> $1) AS similarity
@@ -168,45 +168,45 @@ def search(query: String, limit: Int = 5): IO[List[Wine]] =
 ```
 
 Note:
-- `<=>` devuelve distancia: 0 es idéntico
-- 1 - distancia = similitud, útil para enseñar un score
+- `<=>` returns a distance: 0 means identical
+- 1 - distance = similarity, handy to show a score
 ---
-**Ejemplo**
-- Consulta: *"tinto con cuerpo para acompañar carne"*
-- Top 3: <!-- TODO: poner resultados reales -->
+**Example**
+- Query: *"full-bodied red to go with steak"*
+- Top 3: <!-- TODO: put real results here -->
 
 Note:
-- Mejor enseñar una consulta real sacada de la base de datos
+- Better to show a real query run against the database
 
 
 
-### Un modelo como lector OCR
+### A model as an OCR reader
 <!-- gif -->
 ---
-**Idea**
-- Foto de la carta → modelo de visión (`llama-vision`)
-- Nos devuelve los vinos que aparecen
-- Luego cada vino se busca en la base de datos por embeddings
+**The idea**
+- Photo of the wine list → vision model (`llama-vision`)
+- It returns the wines it finds
+- Each wine is then looked up in the database by embeddings
 
 Note:
-- No usamos un OCR clásico: el modelo entiende la estructura de la carta
+- Not a classic OCR: the model understands the structure of the list
 ---
-**Prompt de sistema vs prompt de usuario**
-- **Sistema**: el rol y las reglas fijas ("eres un extractor, responde solo JSON, no inventes")
-- **Usuario**: la tarea concreta + la imagen
+**System prompt vs user prompt**
+- **System**: the role and fixed rules ("you are an extractor, answer only JSON, don't make things up")
+- **User**: the concrete task + the image
 
 ```scala
 val messages = List(
-  ChatMessage("system", systemPrompt), // rol y reglas fijas
-  ChatMessage("user", "Extrae los vinos de esta carta.", List(imageBase64))
+  ChatMessage("system", systemPrompt), // role and fixed rules
+  ChatMessage("user", "Extract the wines from this wine list.", List(imageBase64))
 )
 ```
 
 Note:
-- El system prompt se mantiene igual en todas las llamadas
-- El user prompt cambia con cada petición
+- The system prompt is the same in every call
+- The user prompt changes with each request
 ---
-**Salida en JSON para poder parsear**
+**JSON output so we can parse it**
 ```json
 { "wines": [
   { "name": "Pago de Carraovejas", "region": "Ribera del Duero", "price": 45.0 }
@@ -218,41 +218,41 @@ final case class MenuWine(name: String, region: Option[String], price: Option[Do
 final case class Menu(wines: List[MenuWine])
 
 for
-  reply <- client.expect[ChatReply](req) // req lleva format = "json"
+  reply <- client.expect[ChatReply](req) // req sets format = "json"
   menu  <- IO.fromEither(parser.decode[Menu](reply.message.content))
 yield menu
 ```
 
 Note:
-- Ollama permite forzar formato JSON en la respuesta
-- Si no parsea, falla en el IO y lo tratamos como error: nada de regex sobre texto libre
+- Ollama can force the response to be JSON
+- If it doesn't parse, the IO fails and we treat it as an error: no regex over free text
 
 
 
-### Recortar las imágenes
+### Cropping the images
 <!-- gif -->
 ---
-- Una foto de móvil entera = muchísimos tokens
-- Recortamos solo la zona de la carta y reducimos resolución
-- Menos tokens → más rápido, más barato
-- Y cabe en los límites de un modelo público
+- A full phone photo = a huge number of tokens
+- We crop just the wine list area and reduce the resolution
+- Fewer tokens → faster and cheaper
+- And it fits within the limits of a public model
 
 Note:
-- Los modelos de visión cobran/limitan por tamaño de imagen
-- Recortar antes de enviar marca la diferencia
+- Vision models charge and limit by image size
+- Cropping before sending makes a big difference
 ---
 ```scala
 def prepare(bytes: Array[Byte], box: Option[Rect] = None, maxSide: Int = 1024): IO[String] =
   IO.blocking {
     val img     = ImageIO.read(new ByteArrayInputStream(bytes))
     val cropped = box.fold(img)(b => img.getSubimage(b.x, b.y, b.w, b.h))
-    val scaled  = shrink(cropped, maxSide) // lado máximo 1024 px
+    val scaled  = shrink(cropped, maxSide) // longest side: 1024 px
     // ... JPEG + Base64
   }
 ```
 
 Note:
-- Código completo en `modules/code` (`ImagePrep.scala`)
+- Full code in `modules/code` (`ImagePrep.scala`)
 
 
 
@@ -260,9 +260,9 @@ Note:
 <!-- gif -->
 
 Note:
-- Foto de la carta → bot de Telegram → recomendación
+- Photo of the wine list → Telegram bot → recommendation
 
 
 
-### ¿Preguntas?
+### Questions?
 ![Alt Text](imgs/questions.webp)

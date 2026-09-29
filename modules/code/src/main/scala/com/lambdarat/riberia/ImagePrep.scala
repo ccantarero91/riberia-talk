@@ -9,7 +9,7 @@ import javax.imageio.ImageIO
 
 final case class Rect(x: Int, y: Int, w: Int, h: Int)
 
-/** Recorta y reduce la foto para gastar menos tokens en el modelo de visión. */
+/** Crops and downsizes the photo to spend fewer tokens on the vision model. */
 object ImagePrep:
 
   def prepare(bytes: Array[Byte], box: Option[Rect] = None, maxSide: Int = 1024): IO[String] =
@@ -35,7 +35,7 @@ object ImagePrep:
       g.dispose()
       target
 
-  // JPEG no admite canal alfa
+  // JPEG has no alpha channel
   private def toRgb(img: BufferedImage): BufferedImage =
     val target = new BufferedImage(img.getWidth, img.getHeight, BufferedImage.TYPE_INT_RGB)
     val g      = target.createGraphics()

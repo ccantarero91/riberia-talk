@@ -15,20 +15,20 @@ final case class ChatReply(message: ReplyMessage) derives Codec.AsObject
 final case class MenuWine(name: String, region: Option[String], price: Option[Double]) derives Codec.AsObject
 final case class Menu(wines: List[MenuWine]) derives Codec.AsObject
 
-/** Lee una carta de vinos con un modelo de visión y devuelve JSON tipado. */
+/** Reads a wine list with a vision model and returns typed JSON. */
 final class MenuOcr(client: Client[IO], ollama: Uri, model: String = "llama3.2-vision"):
 
   private val systemPrompt =
-    """Eres un extractor de cartas de vinos. Responde SOLO con JSON válido con la forma
+    """You are a wine list extractor. Answer ONLY with valid JSON shaped like
       |{"wines":[{"name":string,"region":string|null,"price":number|null}]}.
-      |Si un campo no aparece, usa null. No inventes vinos.""".stripMargin
+      |If a field is not present, use null. Do not invent wines.""".stripMargin
 
   def read(imageBase64: String): IO[Menu] =
     val body = ChatRequest(
       model    = model,
       messages = List(
         ChatMessage("system", systemPrompt),
-        ChatMessage("user", "Extrae los vinos de esta carta.", List(imageBase64))
+        ChatMessage("user", "Extract the wines from this wine list.", List(imageBase64))
       ),
       format   = "json",
       stream   = false
