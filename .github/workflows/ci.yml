@@ -21,8 +21,28 @@ jobs:
           distribution: temurin
           cache: sbt
       - uses: sbt/setup-sbt@v1
-      - name: Compile code module and render slides
-        run: sbt code/compile mdoc
+      - name: Compile code module
+        shell: bash
+        run: |
+          set +e
+          sbt -Dsbt.color=false code/compile 2>&1 | tee /tmp/sbt.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            msg=$(grep -E '^\[error\]' /tmp/sbt.log | head -40 | awk '{printf "%s%%0A", $0}')
+            echo "::error title=sbt code/compile::$msg"
+          fi
+          exit $rc
+      - name: Render slides with mdoc
+        shell: bash
+        run: |
+          set +e
+          sbt -Dsbt.color=false mdoc 2>&1 | tee /tmp/sbt.log
+          rc=${PIPESTATUS[0]}
+          if [ $rc -ne 0 ]; then
+            msg=$(grep -E '^\[error\]' /tmp/sbt.log | head -40 | awk '{printf "%s%%0A", $0}')
+            echo "::error title=sbt mdoc::$msg"
+          fi
+          exit $rc
 
   github-pages:
     name: Publish to GitHub Pages
