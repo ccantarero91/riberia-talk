@@ -25,33 +25,31 @@ Note:
 ---
 **Black and white cats and dogs**
 
-![Cats and dogs placed on two axes](imgs/animals.svg)
+<img src="imgs/animals.svg" style="height:330px; margin:0" alt="Cats and dogs placed on two axes">
 
-- Every item is a point; its position comes from its features
-- Same animal → close on axis 1. Same colour → close on axis 2
-- "White cat" is near "black cat" and "white dog", and far from "black dog"
+- Each item is a point: similar items are close
+- White cat: near black cat and white dog, far from black dog
 
 Note:
 - An embedding turns something into a vector of numbers, here just 2: (animal, colour)
-- Similar things end up close to each other in that space
+- Same animal → close on axis 1. Same colour → close on axis 2
 - "Distance" in this space = how similar two things are
 ---
 **Wine: the same idea, with N dimensions**
-- Each wine becomes a point too, but with **N** coordinates instead of 2
+- Each wine is a point too, with **N** coordinates instead of 2
 - With `bge-m3`, N = 1024
 
 ```text
-"Ribera del Duero crianza"  →  [ 0.12, -0.53, 0.08, ... ]   // 1024 numbers
+"Ribera crianza"  →  [0.12, -0.53, 0.08, ...]
 ```
 
-- We can't name the axes like "animal" or "colour": the model learns them
-- Still the same rule: similar wines are close, different wines are far
-- The user's query becomes a point in the same space
+- The model learns the axes: we can't name them
+- Same rule: similar wines are close, and the query is a point too
 
 Note:
-- Same concept as the cats and dogs, just with many more axes
+- Same concept as the cats and dogs, just with 1024 numbers per wine instead of 2
 - The axes are learned by the model, they are not "red vs white" or "light vs full-bodied" one by one
-- Searching = finding the wines closest to the point of the query
+- The user's query becomes a point in the same space; searching = finding the wines closest to it
 
 
 
