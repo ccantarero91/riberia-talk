@@ -1,8 +1,8 @@
 package com.lambdarat.riberia
 
 import cats.effect.IO
-import doobie.*
-import doobie.implicits.*
+import org.typelevel.doobie.*
+import org.typelevel.doobie.implicits.*
 
 final case class Wine(id: Long, name: String, region: Option[String])
 

@@ -6,6 +6,7 @@ lazy val commonSettings = Seq(
     "org.http4s"    %% "http4s-ember-client" % "0.23.38",
     "org.http4s"    %% "http4s-circe"        % "0.23.38",
     "io.circe"      %% "circe-core"          % "0.14.16",
+    "io.circe"      %% "circe-parser"        % "0.14.16",
     "org.typelevel" %% "doobie-core"         % "1.0.0-RC13",
     "org.typelevel" %% "doobie-postgres"     % "1.0.0-RC13"
   )
