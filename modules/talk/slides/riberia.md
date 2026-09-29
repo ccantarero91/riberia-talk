@@ -62,14 +62,23 @@ Note:
 Note:
 - No hace falta una base de datos vectorial nueva si ya tienes Postgres
 ---
+**Activar pgvector**
+- Es una extensión de Postgres: se activa con una sola línea
+- En Docker, basta con usar una imagen de Postgres que ya la incluya (`pgvector/pgvector`)
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+Note:
+- No hay que instalar nada más en la aplicación: la extensión añade el tipo `vector` y los operadores de distancia
+---
 **pgvector**
 - Extensión de Postgres: nuevo tipo `vector(n)`
 - Operadores de distancia e índices (HNSW / IVFFlat)
 - Seguimos con SQL, transacciones y joins de siempre
 
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector;
-
 CREATE TABLE wines (
   id        BIGSERIAL PRIMARY KEY,
   name      TEXT NOT NULL,
@@ -84,14 +93,6 @@ CREATE INDEX ON wines USING hnsw (embedding vector_cosine_ops);
 Note:
 - 1024 porque es la dimensión de bge-m3
 - El índice HNSW hace la búsqueda aproximada rápida
----
-**Plugins**
-<!-- TODO: concretar qué plugins quieres contar -->
-- Extensión `vector` en Postgres
-- Ollama para servir embeddings y LLM en local
-
-Note:
-- (Revisar este punto)
 ---
 **Embeddings desde Scala**
 ```scala
