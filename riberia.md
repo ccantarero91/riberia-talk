@@ -23,17 +23,40 @@ Note:
 - The model doesn't know our wine catalogue or the user's profile
 - Instead of retraining it, we look up what's relevant and put it in the prompt
 ---
-**Black and white cats and dogs**
+**Cats and dogs on two axes**
 
-<img src="imgs/animals.svg" style="height:330px; margin:0" alt="Cats and dogs placed on two axes">
+<img src="imgs/animals.svg" style="height:360px; margin:0" alt="Cats and dogs placed on two axes, with their coordinates">
 
-- Each item is a point: similar items are close
-- White cat: near black cat and white dog, far from black dog
+- Every item gets two numbers: its **vector**
 
 Note:
-- An embedding turns something into a vector of numbers, here just 2: (animal, colour)
-- Same animal → close on axis 1. Same colour → close on axis 2
-- "Distance" in this space = how similar two things are
+- Axis 1 is the animal (cat = -1, dog = +1), axis 2 is the colour (black = -1, white = +1)
+- An embedding is exactly this: a list of numbers that says where something sits
+- Similar things end up close to each other
+---
+**Doing maths with meaning**
+
+<img src="imgs/equation.svg" style="width:820px; margin:0" alt="black dog minus white dog plus white cat equals black cat">
+
+- Black dog minus white dog leaves only "make it black"
+- Add that to a white cat and we get a black cat
+
+Note:
+- [1, -1] - [1, 1] + [-1, 1] = [-1, -1]
+- [1, -1] - [1, 1] = [0, -2]: subtracting "white dog" removes the "dog" and leaves only the change in colour (white → black)
+- With real embeddings this works approximately, not exactly (the classic example: king - man + woman ≈ queen)
+---
+**Searching = finding the closest arrow**
+
+<img src="imgs/cosine.svg" style="height:330px; margin:0" alt="Query vector compared by cosine with the four animals">
+
+- Cosine compares the **angle**: 1 = same direction, 0 = unrelated, -1 = opposite
+- pgvector's <code>&lt;=&gt;</code> returns 1 − cosine: the smaller, the closer
+
+Note:
+- The query "a whitish cat" becomes the vector [-0.8, 0.6] and points almost at "white cat"
+- Cosine similarity: white cat 0.99, black cat 0.14, white dog -0.14, black dog -0.99
+- As `<=>` distance (1 - cosine): 0.01, 0.86, 1.14, 1.99. Order by it ascending and the first result is the white cat
 ---
 **Wine: the same idea, with N dimensions**
 - Each wine is a point too, with **N** coordinates instead of 2
