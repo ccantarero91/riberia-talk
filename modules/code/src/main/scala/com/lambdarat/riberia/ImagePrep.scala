@@ -7,16 +7,13 @@ import java.io.ByteArrayOutputStream
 import java.util.Base64
 import javax.imageio.ImageIO
 
-final case class Rect(x: Int, y: Int, w: Int, h: Int)
-
-/** Crops and downsizes the photo to spend fewer tokens on the vision model. */
+/** Caps the longest side of the photo to spend fewer tokens on the vision model. */
 object ImagePrep:
 
-  def prepare(bytes: Array[Byte], box: Option[Rect] = None, maxSide: Int = 1024): IO[String] =
+  def prepare(bytes: Array[Byte], maxSide: Int = 1024): IO[String] =
     IO.blocking {
-      val img     = ImageIO.read(new java.io.ByteArrayInputStream(bytes))
-      val cropped = box.fold(img)(b => img.getSubimage(b.x, b.y, b.w, b.h))
-      val scaled  = shrink(cropped, maxSide)
+      val img    = ImageIO.read(new java.io.ByteArrayInputStream(bytes))
+      val scaled = shrink(img, maxSide)
 
       val out = new ByteArrayOutputStream()
       ImageIO.write(scaled, "jpg", out)

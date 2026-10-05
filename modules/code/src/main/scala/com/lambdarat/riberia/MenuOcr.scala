@@ -16,7 +16,7 @@ final case class MenuWine(name: String, region: Option[String], price: Option[Do
 final case class Menu(wines: List[MenuWine]) derives Codec.AsObject
 
 /** Reads a wine list with a vision model and returns typed JSON. */
-final class MenuOcr(client: Client[IO], ollama: Uri, model: String = "llama3.2-vision"):
+final class MenuOcr(client: Client[IO], ollama: Uri, model: String = "qwen2.5vl:7b"):
 
   private val systemPrompt =
     """You are a wine list extractor. Answer ONLY with valid JSON shaped like

@@ -1,6 +1,6 @@
-# Ribería talk
+# Riberia talk
 
-Talk about **Ribería**: wine recommendations with RAG (pgvector + embeddings) and reading wine lists with a vision model, all in Scala.
+Talk about **Riberia**: wine recommendations with RAG (pgvector + embeddings) and reading wine lists with a vision model, all in Scala.
 
 - `modules/talk`: slides written in markdown, presented with [reveal.js](https://revealjs.com/) and processed with [`mdoc`](https://scalameta.org/mdoc/)
 - `modules/code`: the Scala code behind the demo, compiled in CI so the slide snippets don't rot
