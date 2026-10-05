@@ -1,13 +1,16 @@
-## Ribería: wine recommendations with RAG in Scala
+## Riberia: wine recommendations with RAG in Scala
 ---
+<!-- .slide: data-background-image="https://opengraph.githubassets.com/1/ccantarero91/riberia-talk" data-background-opacity="0.2" -->
 - Who? Cristian Cantarero
 - What? A bot that reads a wine list from a photo and recommends what to order based on your taste
-- How? Scala + Postgres/pgvector + Ollama
+- Why? Every time I'm in a restaurant I have no idea which wine to pick. I was also taking a course on this stuff, so I built the recommender
+- How? Scala 3 + Postgres + Ollama
 
 Note:
-- Quick intro
+- Quick intro, not too long
+- The motivation: standing in front of a wine list with no clue what to order
 - The idea: you take a photo of the restaurant's wine list and the bot tells you what to order
-- The whole backend is Scala: smithy4s, http4s and a Telegram bot
+- The whole backend is Scala: smithy4s, http4s and a Telegram bot. Postgres is the only database, Ollama runs the models
 
 
 
@@ -58,57 +61,58 @@ Note:
 - Cosine similarity: white cat 0.99, black cat 0.14, white dog -0.14, black dog -0.99
 - As `<=>` distance (1 - cosine): 0.01, 0.86, 1.14, 1.99. Order by it ascending and the first result is the white cat
 ---
-**Wine: the same idea, with N dimensions**
-- Each wine is a point too, with **N** coordinates instead of 2
-- With `bge-m3`, N = 1024
+**Now with wines: the same idea**
+
+<img src="imgs/wines.svg" style="height:360px; margin:0" alt="Four wines placed on two axes: body and tannins, with their coordinates">
+
+- Each axis describes something about the wine: here **body** and **tannins**, two of the questions in the user's taste profile
+- Every wine gets two numbers: its **vector**
+
+Note:
+- In Riberia the taste profile asks: wine type, sweetness, flavours, body, tannins and occasion
+- Here I picked two of them as axes so you can see the idea
+- Similar wines end up close to each other, and the query ("a full-bodied red") is a point too
+---
+**With real embeddings we don't pick the axes**
+- Each wine has **N** coordinates instead of 2: with `bge-m3`, N = 1024
 
 ```text
 "Ribera crianza"  →  [0.12, -0.53, 0.08, ...]
 ```
 
-- The model learns the axes: we can't name them
-- Same rule: similar wines are close, and the query is a point too
+- The model learns the axes by itself: we can't say what each one means
+- Axis 17 may mix "red", "astringent" and "oak" in a way no human would name
+- Same rule: similar wines are close
 
 Note:
-- Same concept as the cats and dogs, just with 1024 numbers per wine instead of 2
-- The axes are learned by the model, they are not "red vs white" or "light vs full-bodied" one by one
-- The user's query becomes a point in the same space; searching = finding the wines closest to it
-
+- This is the honest bit: the drawing is a simplification
+- We never know what each of the 1024 dimensions represents, we only know the distances make sense
 
 
 ### How to implement a RAG
 <!-- gif -->
 ---
 **The pieces**
-1. Embedding model → text to vector
-2. Vector database → store and search vectors
-3. LLM → write the answer using that context
+
+<img src="imgs/rag-pieces.svg" style="height:400px; margin:0" alt="The app talks to Postgres with pgvector and to an LLM, which uses an embedding model and an answer model">
 
 Note:
+- 1. The vector database: Postgres extended with pgvector
+- 2. The LLM side has two models: one turns text into vectors (embeddings), the other writes the answer. In Riberia the answer model is a vision model that reads the photo
+- The asterisk: the answer model is explained later, in the image part
 - You don't need a new vector database if you already have Postgres
 ---
-**Enabling pgvector**
-- It's a Postgres extension: one line to enable it
-- With Docker, just use a Postgres image that already ships it (`pgvector/pgvector`)
+**Postgres + pgvector**
+- We extend plain Postgres with the `pgvector` extension: that's our vector database
+- One line to enable it (with Docker, use the `pgvector/pgvector` image)
+- New `vector(n)` type, distance operators and indexes. Still plain SQL
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
-```
 
-Note:
-- Nothing else to install in the application: the extension adds the `vector` type and the distance operators
----
-**pgvector**
-- Postgres extension: new `vector(n)` type
-- Distance operators and indexes (HNSW / IVFFlat)
-- Still plain SQL, transactions and joins
-
-```sql
 CREATE TABLE wines (
   id        BIGSERIAL PRIMARY KEY,
   name      TEXT NOT NULL,
-  region    TEXT,
-  notes     TEXT,
   embedding vector(1024)
 );
 
@@ -116,8 +120,41 @@ CREATE INDEX ON wines USING hnsw (embedding vector_cosine_ops);
 ```
 
 Note:
+- Nothing else to install in the application: the extension adds the `vector` type and the distance operators
 - 1024 because that's the dimension of bge-m3
 - The HNSW index makes approximate search fast
+
+
+
+### Which model for embeddings?
+<!-- gif -->
+---
+**What matters**
+- Language: not all embedding models are good outside English
+- Vector size (storage and search cost)
+- Can it run locally?
+
+Note:
+- Embedding models are not all equal once you leave English
+---
+**What we do with the embeddings**
+- Wines: the description of every wine is embedded once and stored in `wines.embedding`
+- Users: the answers of the taste questionnaire are embedded when they ask for a recommendation
+- Both go through the **same** model, so they land in the same space
+
+Note:
+- The wine descriptions come from Vivino, in English
+- The questionnaire answers are in Spanish
+- That is why the model matters
+---
+**My case: nomic → bge-m3**
+- I started with `nomic-embed-text`: English only, so Spanish answers never matched English descriptions
+- Switched to `bge-m3`: multilingual, both languages share one vector space
+- Careful: changing model = recomputing every embedding
+
+Note:
+- Vectors from different models are not comparable
+- You have to reindex the whole table when you migrate
 ---
 **Embeddings from Scala**
 ```scala
@@ -137,29 +174,6 @@ def embed(text: String): IO[Vector[Float]] =
 Note:
 - A plain HTTP call to Ollama with http4s + circe
 - The same function indexes the wines and embeds the user's query
-
-
-
-### Which model for embeddings?
-<!-- gif -->
----
-**What matters**
-- Language: not all embedding models are good outside English
-- Vector size (storage and search cost)
-- Can it run locally?
-
-Note:
-- Embedding models are not all equal once you leave English
----
-**My case: nomic → bge-m3**
-- I started with `nomic-embed-text`: fine in English, weaker in Spanish
-- Switched to `bge-m3`: multilingual
-- Better results with Spanish queries
-- Careful: changing model = recomputing every embedding
-
-Note:
-- Vectors from different models are not comparable
-- You have to reindex the whole table when you migrate
 
 
 
@@ -202,34 +216,23 @@ Note:
 
 Note:
 - Better to show a real query run against the database
+- This was the first path: from a list of wines we recommend. Next: the same thing starting from a photo
 
 
 
-### A model as an OCR reader
+### From a photo: a model as an OCR reader
 <!-- gif -->
 ---
 **The idea**
-- Photo of the wine list → vision model (`llama-vision`)
+- First pass: photo of the wine list → vision model
 - It returns the wines it finds
-- Each wine is then looked up in the database by embeddings
+- Each wine is then looked up in the database by embeddings, exactly as before
 
 Note:
 - Not a classic OCR: the model understands the structure of the list
----
-**System prompt vs user prompt**
-- **System**: the role and fixed rules ("you are an extractor, answer only JSON, don't make things up")
-- **User**: the concrete task + the image
-
-```scala
-val messages = List(
-  ChatMessage("system", systemPrompt), // role and fixed rules
-  ChatMessage("user", "Extract the wines from this wine list.", List(imageBase64))
-)
-```
-
-Note:
-- The system prompt is the same in every call
-- The user prompt changes with each request
+- Locally we ran `qwen2.5vl:7b` in Ollama, but the live version uses a cloud model through Ollama Cloud
+- Temperature 0 and a strict prompt: we want literal extraction, no invented wines
+- The prompt is always the same, only the image changes
 ---
 **JSON output so we can parse it**
 ```json
@@ -254,30 +257,31 @@ Note:
 
 
 
-### Cropping the images
+### Capping the image size
 <!-- gif -->
 ---
 - A full phone photo = a huge number of tokens
-- We crop just the wine list area and reduce the resolution
-- Fewer tokens → faster and cheaper
-- And it fits within the limits of a public model
+- We don't crop anything: we just set a **maximum size** (1024 px on the longest side)
+- Fewer tokens → faster, cheaper, and it fits the model's context
+- Some models have a resolution cliff where the cost jumps sharply
 
 Note:
 - Vision models charge and limit by image size
-- Cropping before sending makes a big difference
+- In Riberia the cap is configurable (default 1024 px) and the image is re-encoded as JPEG, fixing the EXIF orientation
+- We'll see it working in the demo
 ---
 ```scala
-def prepare(bytes: Array[Byte], box: Option[Rect] = None, maxSide: Int = 1024): IO[String] =
+def prepare(bytes: Array[Byte], maxSide: Int = 1024): IO[String] =
   IO.blocking {
-    val img     = ImageIO.read(new ByteArrayInputStream(bytes))
-    val cropped = box.fold(img)(b => img.getSubimage(b.x, b.y, b.w, b.h))
-    val scaled  = shrink(cropped, maxSide) // longest side: 1024 px
+    val img    = ImageIO.read(new ByteArrayInputStream(bytes))
+    val scaled = shrink(img, maxSide) // longest side: 1024 px
     // ... JPEG + Base64
   }
 ```
 
 Note:
 - Full code in `modules/code` (`ImagePrep.scala`)
+- The real project uses scrimage instead of raw ImageIO because it handles EXIF orientation
 
 
 
@@ -286,6 +290,44 @@ Note:
 
 Note:
 - Photo of the wine list → Telegram bot → recommendation
+
+
+
+### Taking it to production
+<!-- gif -->
+---
+**Where it runs**
+
+<img src="imgs/prod.svg" style="height:380px; margin:0" alt="GitHub builds the images and deploys over SSH to an Oracle Cloud VM running docker compose with the bot, the API, Postgres with pgvector and a local Ollama for embeddings; vision goes to Ollama Cloud and the bot polls Telegram">
+
+Note:
+- Goal: a POC at the lowest possible cost, with production security defaults
+- Oracle Cloud Always Free ARM VM (2 OCPU, 12 GB): the only free tier that runs the whole stack
+- Everything is one docker compose; the bot needs no inbound connectivity (it polls Telegram)
+- The vision model is not on the VM: it goes to Ollama Cloud, so no GPU and no heavy model to pull
+- The small local Ollama only serves bge-m3, so the existing embeddings stay valid (no re-embedding)
+---
+**How a deploy works**
+- Every push to `main`: CI builds multi-arch images (ARM for the VM) and pushes them to **GHCR**
+- A deploy workflow connects over **SSH**, runs `docker compose pull` + `up -d`, and checks `/health`
+- Secrets live in a GitHub Environment and in `.env.secrets` on the VM: never in git
+- The API requires an **API key** and only the necessary ports are open
+
+Note:
+- Hand-written deploy.yml, separate from the generated CI
+- Dedicated deploy key, pinned host key, no third-party SSH actions
+- Gotcha: the SQL files in `databases/` only run on an empty volume, so schema changes are applied by hand
+---
+**What the project depends on**
+- **Runtime**: Scala 3, cats-effect, http4s, smithy4s, doobie, pureconfig
+- **AI**: langchain4j, Ollama (local embeddings), Ollama Cloud (vision), scrimage for the images
+- **Data**: Postgres + pgvector; wines scraped from Vivino with jsoup
+- **Channels**: Telegram bot (telegramium)
+- **Infra**: Docker, GHCR, GitHub Actions, Oracle Cloud
+
+Note:
+- The scraper runs on a schedule on the VM and creates the wines people asked for and we did not have
+- Swapping the vision provider is a config change (`CELLAR_LLM_CHAT_*`): Ollama Cloud, Groq, OpenAI...
 
 
 
