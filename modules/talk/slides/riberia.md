@@ -243,12 +243,19 @@ Note:
 - We don't search the whole catalog: we first match the wines on the restaurant's list by name, then rank only those by how close they are to the user's taste
 - `<=>` returns a distance: 0 means identical. Order ascending, keep the first
 ---
-**Example**
-- Query: *"full-bodied red to go with steak"*
-- Top 3: <!-- TODO: put real results here -->
+**A real run: same list, two tastes**
+
+<table style="font-size:0.5em"><thead><tr><th>Wine on the list</th><th>🔥 Bold taste</th><th>🥂 White taste</th></tr></thead><tbody><tr><td><b>Ontañón Dominio de la Abadesa Verdejo</b> <small style="opacity:.6">white</small></td><td>0.330</td><td><b>0.287</b> 🥇</td></tr><tr><td>Arzuaga Fan D.Oro <small style="opacity:.6">white</small></td><td>0.335</td><td>0.318</td></tr><tr><td><b>Aalto</b> <small style="opacity:.6">red</small></td><td><b>0.301</b> 🥇</td><td>0.327</td></tr><tr><td>Muga Blanco <small style="opacity:.6">white</small></td><td>0.356</td><td>0.327</td></tr><tr><td>Emilio Moro Malleolus <small style="opacity:.6">red</small></td><td>0.322</td><td>0.343</td></tr><tr><td>Condado de Haza Crianza <small style="opacity:.6">red</small></td><td>0.336</td><td>0.351</td></tr><tr><td>Marqués de Murrieta Capellanía <small style="opacity:.6">white</small></td><td>0.392</td><td>0.372</td></tr><tr><td>Vega Sicilia Único <small style="opacity:.6">red</small></td><td>0.345</td><td>0.377</td></tr><tr><td>Pazo de Señoráns Albariño</td><td colspan="2"><i>not in our catalog</i></td></tr></tbody></table>
 
 Note:
-- Better to show a real query run against the database
+- Real run against the local app: two questionnaires, then `POST /recommendation` with the same list of 9 wines, reds and whites mixed
+- Bold = red, bone dry, spicy + earthy, full-bodied, strong tannins, special dinner
+- White = white, dry, fruity + floral, light-bodied, soft tannins, everyday with friends
+- Numbers are the `<=>` distance (lower = closer). Pazo de Señoráns is not in the catalog, so it goes to the wanted-wines backlog
+- Now the winners differ: Aalto for the bold taste, the Ontañón Verdejo for the white one. Whites move up for the white taste, reds for the bold one
+- That only happened once the catalog had whites: we added the Rioja whites from Vivino. With only Ribera reds, both tastes got Aalto
+- The honest lesson: the gaps are still small (0.29 to 0.39). Descriptions are marketing text that look alike
+- RAG is only as good as the data you retrieve from: better data → better recommendations
 - Next: where that list of wines comes from: a photo
 
 
@@ -365,6 +372,36 @@ Note:
 - Now that we've seen every piece, let's see them working together
 - Telegram bot: answer the taste questionnaire, then send a photo of a wine list → recommendation
 - Hopefully the audience reacts like Ego 🙂
+
+
+
+### Conclusions
+<img src="https://media.giphy.com/media/Gi9dJsd3azHEY/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Remy sitting on Linguini's head, about to guide him in the kitchen">
+
+Note:
+- Like Linguini and Remy: I'm the one in the kitchen, but I didn't cook alone
+---
+**Built alongside GenAI**
+
+<div class="cards"><div class="card"><span class="big">⌨️</span><b>Copilot</b>Autocomplete: faster typing, same me</div><div class="card"><span class="big">🧑‍🍳</span><b>Jules</b>Hand over a whole feature, review the PR</div><div class="card hot"><span class="big">🛠️</span><b>Claude Code</b>A professional workflow: plan, test, review</div></div>
+
+Note:
+- The whole RAG service grew at the same time as GenAI did
+- It started with Copilot autocompleting lines
+- Then Jules: asking for a feature and getting a pull request back
+- Today Claude Code, used in a much more professional way: plans, tests, reviews, CI
+- The project and the tools matured together
+---
+**What I take away**
+
+<div class="cards"><div class="card"><span class="big">⏱️</span><b>A multiplier</b>Little free time, a lot built</div><div class="card"><span class="big">🛡️</span><b>Scala = guardrails</b>Strong types, errors at compile time</div><div class="card hot"><span class="big">🧰</span><b>Workflow & harness</b>The AI is only as good as its loop</div></div>
+
+Note:
+- AI is a multiplier for people like me with little time for side projects: without it, I would never have built something like this
+- Scala helps compared to other languages: there are many ways to implement something, but strong typing and compile errors put guardrails on both the specification and the code the AI writes
+- Opaque types, smithy4s contracts, tagless final: when the AI gets it wrong, the compiler says so before production does
+- The workflow and the harness matter most: AGENTS.md, tests, formatting, CI, tools like Metals MCP
+- The better the feedback loop, the better the AI works
 
 
 
