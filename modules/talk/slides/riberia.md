@@ -273,6 +273,9 @@ Note:
 - Questions: every user shared the same long question text; the answers were a few words at the end. All profiles looked alike
 - Colour: as one word inside an embedding it barely moved the vector. Now the colour asked for in the questionnaire narrows the candidates (never to nothing) and cosine ranks inside that colour
 - Numbers: mean `<=>` from `scripts/embedding-separation.sql` on production, before and after re-embedding 1035 wines and the profiles
+- How to read them: `<=>` is 1 - cosine, so 0 = same direction and lower = closer
+- "white ↔ white", "red ↔ red": average distance between two wines of the same colour (how alike the whites are among themselves). "white ↔ red": average distance between a white and a red. You want the last one clearly bigger than the first two
+- "Advantage of the colour it asked for": for each profile, distance to the average red minus distance to the average white (or the other way round for a red profile). How much closer it is to its own colour. Bigger = the vector alone already points to the right colour
 - The win is on the profile side: each profile is now 3 to 10 times further ahead for its own colour, and that is what decides a recommendation
 - Honest part: between wines the gap did not open. Without the pairing the whites look less alike, so white↔white grew more than white↔red
 - bge-m3 keeps almost any two wine texts within ~0.1 to 0.4 of each other. Cleaner text widens the gaps, it will never give you 0.1 vs 0.9. That is why colour became a rule instead of a hope
@@ -283,6 +286,7 @@ Note:
 
 Note:
 - Same two questionnaires, same list, against production after the re-embed
+- Same reading as before: each cell is the `<=>` distance between that wine and that taste profile, lower = closer, 🥇 = the one we recommend
 - Bold: the 4 reds now come before every white. Aalto wins at 0.203; the best white is at 0.265
 - White: Arzuaga Fan D.Oro wins at 0.196, then Muga Blanco and the Verdejo; the best red is at 0.274
 - Capellanía is the odd one: a white Reserva aged in oak, and its description reads closer to a structured wine than to "light and fruity", so it lands behind three reds. The vector reads style, not just colour
