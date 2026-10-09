@@ -264,9 +264,11 @@ Note:
 
 <div class="cards"><div class="card"><span class="big">🍖</span><b>No pairing</b>"Beef, Lamb" was a third of every wine's text</div><div class="card"><span class="big">❓</span><b>No questions</b>the profile was mostly the same question text for everyone</div><div class="card hot"><span class="big">🍷</span><b>Colour is a rule</b>filter first, then rank by cosine</div></div>
 
-<table style="font-size:0.5em"><thead><tr><th></th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>Profile: advantage of the colour it asked for</td><td>0.004 – 0.019</td><td><b>0.040 – 0.077</b></td></tr><tr><td>white ↔ white</td><td>0.078</td><td>0.124</td></tr><tr><td>red ↔ red</td><td>0.131</td><td>0.144</td></tr><tr><td>white ↔ red</td><td>0.230</td><td>0.249</td></tr></tbody></table>
+<table style="font-size:0.5em"><thead><tr><th></th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>Profile: advantage of the colour it asked for</td><td>0.004 – 0.019</td><td><b>0.040 – 0.077</b></td></tr><tr><td>two whites</td><td>0.078</td><td>0.124</td></tr><tr><td>two reds</td><td>0.131</td><td>0.144</td></tr><tr><td>a white vs a red</td><td>0.230</td><td>0.249</td></tr></tbody></table>
 
-Distances live in a narrow band: compare rankings and gaps, not absolute values
+<small style="opacity:.7; font-size:.45em">mean <code>&lt;=&gt;</code> = 1 − cosine · lower = closer · we want the last row well above the two before it</small>
+
+<span style="font-size:.8em">Compare rankings and gaps, not absolute values</span>
 
 Note:
 - Pairing: the questionnaire never asks about food, so "Beef, Lamb" vs "Fish, Seafood" only added noise to the comparison with the profile
@@ -274,13 +276,13 @@ Note:
 - Colour: as one word inside an embedding it barely moved the vector. Now the colour asked for in the questionnaire narrows the candidates (never to nothing) and cosine ranks inside that colour
 - Numbers: mean `<=>` from `scripts/embedding-separation.sql` on production, before and after re-embedding 1035 wines and the profiles
 - How to read them: `<=>` is 1 - cosine, so 0 = same direction and lower = closer
-- "white ↔ white", "red ↔ red": average distance between two wines of the same colour (how alike the whites are among themselves). "white ↔ red": average distance between a white and a red. You want the last one clearly bigger than the first two
+- "two whites", "two reds": average distance between two wines of the same colour (how alike the whites are among themselves). "a white vs a red": average distance between a white and a red. You want the last one clearly bigger than the first two
 - "Advantage of the colour it asked for": for each profile, distance to the average red minus distance to the average white (or the other way round for a red profile). How much closer it is to its own colour. Bigger = the vector alone already points to the right colour
 - The win is on the profile side: each profile is now 3 to 10 times further ahead for its own colour, and that is what decides a recommendation
 - Honest part: between wines the gap did not open. Without the pairing the whites look less alike, so white↔white grew more than white↔red
 - bge-m3 keeps almost any two wine texts within ~0.1 to 0.4 of each other. Cleaner text widens the gaps, it will never give you 0.1 vs 0.9. That is why colour became a rule instead of a hope
 ---
-**Same list, after the change**
+**Same list, after the change** <small style="opacity:.7">(<code>&lt;=&gt;</code>, lower = closer)</small>
 
 <table style="font-size:0.5em"><thead><tr><th>Wine on the list</th><th>🔥 Bold taste</th><th>🥂 White taste</th></tr></thead><tbody><tr><td><b>Arzuaga Fan D.Oro</b> <small style="opacity:.6">white</small></td><td>0.265</td><td><b>0.196</b> 🥇</td></tr><tr><td>Muga Blanco <small style="opacity:.6">white</small></td><td>0.299</td><td>0.209</td></tr><tr><td>Ontañón Dominio de la Abadesa Verdejo <small style="opacity:.6">white</small></td><td>0.316</td><td>0.221</td></tr><tr><td>Condado de Haza Crianza <small style="opacity:.6">red</small></td><td>0.210</td><td>0.274</td></tr><tr><td><b>Aalto</b> <small style="opacity:.6">red</small></td><td><b>0.203</b> 🥇</td><td>0.285</td></tr><tr><td>Emilio Moro Malleolus <small style="opacity:.6">red</small></td><td>0.216</td><td>0.293</td></tr><tr><td>Marqués de Murrieta Capellanía <small style="opacity:.6">white</small></td><td>0.365</td><td>0.309</td></tr><tr><td>Vega Sicilia Único <small style="opacity:.6">red</small></td><td>0.237</td><td>0.324</td></tr><tr><td>Pazo de Señoráns Albariño</td><td colspan="2"><i>not in our catalog</i></td></tr></tbody></table>
 
