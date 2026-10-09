@@ -229,8 +229,11 @@ Note:
 
 <div class="cards"><div class="card"><span class="big"><code>&lt;-&gt;</code></span><b>Euclidean</b>straight-line distance</div><div class="card"><span class="big"><code>&lt;#&gt;</code></span><b>Inner product</b>(negative)</div><div class="card hot"><span class="big"><code>&lt;=&gt;</code></span><b>Cosine</b>the one we use</div></div>
 
+<img src="imgs/cosine-vs-euclidean.svg" style="height:220px; margin:20px 0 0" alt="Two arrows in the same direction with different lengths: far apart by Euclidean distance, identical by cosine">
+
 Note:
 - Cosine measures the angle between vectors, not their length (the arrows from the cats and dogs)
+- A short and a long review of the same wine point the same way: Euclidean says they are far apart, cosine says they are identical. We care about what the text talks about, not how much it says
 ---
 **The real query**
 ```sql
@@ -251,14 +254,14 @@ Note:
 <table style="font-size:0.5em"><thead><tr><th>Wine on the list</th><th>🔥 Bold taste</th><th>🥂 White taste</th></tr></thead><tbody><tr><td><b>Ontañón Dominio de la Abadesa Verdejo</b> <small style="opacity:.6">white</small></td><td>0.330</td><td><b>0.287</b> 🥇</td></tr><tr><td>Arzuaga Fan D.Oro <small style="opacity:.6">white</small></td><td>0.335</td><td>0.318</td></tr><tr><td><b>Aalto</b> <small style="opacity:.6">red</small></td><td><b>0.301</b> 🥇</td><td>0.327</td></tr><tr><td>Muga Blanco <small style="opacity:.6">white</small></td><td>0.356</td><td>0.327</td></tr><tr><td>Emilio Moro Malleolus <small style="opacity:.6">red</small></td><td>0.322</td><td>0.343</td></tr><tr><td>Condado de Haza Crianza <small style="opacity:.6">red</small></td><td>0.336</td><td>0.351</td></tr><tr><td>Marqués de Murrieta Capellanía <small style="opacity:.6">white</small></td><td>0.392</td><td>0.372</td></tr><tr><td>Vega Sicilia Único <small style="opacity:.6">red</small></td><td>0.345</td><td>0.377</td></tr><tr><td>Pazo de Señoráns Albariño</td><td colspan="2"><i>not in our catalog</i></td></tr></tbody></table>
 
 Note:
-- Real run against the local app: two questionnaires, then `POST /recommendation` with the same list of 9 wines, reds and whites mixed
-- Bold = red, bone dry, spicy + earthy, full-bodied, strong tannins, special dinner
-- White = white, dry, fruity + floral, light-bodied, soft tannins, everyday with friends
-- Numbers are the `<=>` distance (lower = closer). Pazo de Señoráns is not in the catalog, so it goes to the wanted-wines backlog
-- Now the winners differ: Aalto for the bold taste, the Ontañón Verdejo for the white one. Whites move up for the white taste, reds for the bold one
-- That only happened once the catalog had whites: we added the Rioja whites from Vivino. With only Ribera reds, both tastes got Aalto
-- The honest lesson: the gaps are still small (0.29 to 0.39). The winner beats the best wine of the other colour by only 0.03–0.04
-- RAG is only as good as the data you retrieve from, and as what you choose to embed
+- Real run: two questionnaires, same list of 9 wines, reds and whites mixed
+  - 🔥 **Bold**: red, dry, full-bodied, strong tannins
+  - 🥂 **White**: white, fruity and floral, light
+- Each cell is the `<=>` distance, lower = closer. 🥇 = what we recommend
+- **Different winners**: Aalto for bold, the Verdejo for white. Only once we added Rioja whites; with just Ribera reds both got Aalto
+- **Honest part**: the gaps are tiny. The winner beats the best wine of the other colour by only 0.03–0.04
+- **Takeaway**: RAG is only as good as your data and what you choose to embed
+- (Pazo de Señoráns is not in the catalog, so it goes to the wanted-wines backlog)
 ---
 **Removing the noise**
 
@@ -271,30 +274,28 @@ Note:
 <span style="font-size:.8em">Compare rankings and gaps, not absolute values</span>
 
 Note:
-- Pairing: the questionnaire never asks about food, so "Beef, Lamb" vs "Fish, Seafood" only added noise to the comparison with the profile
-- Questions: every user shared the same long question text; the answers were a few words at the end. All profiles looked alike
-- Colour: as one word inside an embedding it barely moved the vector. Now the colour asked for in the questionnaire narrows the candidates (never to nothing) and cosine ranks inside that colour
-- Numbers: mean `<=>` from `scripts/embedding-separation.sql` on production, before and after re-embedding 1035 wines and the profiles
-- How to read them: `<=>` is 1 - cosine, so 0 = same direction and lower = closer
-- "two whites", "two reds": average distance between two wines of the same colour (how alike the whites are among themselves). "a white vs a red": average distance between a white and a red. You want the last one clearly bigger than the first two
-- "Advantage of the colour it asked for": for each profile, distance to the average red minus distance to the average white (or the other way round for a red profile). How much closer it is to its own colour. Bigger = the vector alone already points to the right colour
-- The win is on the profile side: each profile is now 3 to 10 times further ahead for its own colour, and that is what decides a recommendation
-- Honest part: between wines the gap did not open. Without the pairing the whites look less alike, so white↔white grew more than white↔red
-- bge-m3 keeps almost any two wine texts within ~0.1 to 0.4 of each other. Cleaner text widens the gaps, it will never give you 0.1 vs 0.9. That is why colour became a rule instead of a hope
+- Three changes to what we embed:
+  - **No pairing**: the questionnaire never asks about food, so "Beef, Lamb" was pure noise
+  - **No questions**: every profile shared the same long question text; the answers were just a few words
+  - **Colour as a rule**: one word barely moves the vector. Filter by colour first, then rank by cosine
+- Reading the table (lower = closer):
+  - **First row is the win**: how much closer each profile is to its own colour. 3 to 10 times more than before
+  - **Last three rows**: distance between wines. We want white vs red well above the other two
+- **Honest part**: between wines it barely moved. bge-m3 keeps any two wine texts within ~0.1–0.4
+- **Takeaway**: cleaner text helps, but it will never give you 0.1 vs 0.9. That is why colour is a rule, not a hope
+- (If asked: `scripts/embedding-separation.sql` on production, 1035 wines re-embedded)
 ---
 **Same list, after the change** <small style="opacity:.7">(<code>&lt;=&gt;</code>, lower = closer)</small>
 
 <table style="font-size:0.5em"><thead><tr><th>Wine on the list</th><th>🔥 Bold taste</th><th>🥂 White taste</th></tr></thead><tbody><tr><td><b>Arzuaga Fan D.Oro</b> <small style="opacity:.6">white</small></td><td>0.265</td><td><b>0.196</b> 🥇</td></tr><tr><td>Muga Blanco <small style="opacity:.6">white</small></td><td>0.299</td><td>0.209</td></tr><tr><td>Ontañón Dominio de la Abadesa Verdejo <small style="opacity:.6">white</small></td><td>0.316</td><td>0.221</td></tr><tr><td>Condado de Haza Crianza <small style="opacity:.6">red</small></td><td>0.210</td><td>0.274</td></tr><tr><td><b>Aalto</b> <small style="opacity:.6">red</small></td><td><b>0.203</b> 🥇</td><td>0.285</td></tr><tr><td>Emilio Moro Malleolus <small style="opacity:.6">red</small></td><td>0.216</td><td>0.293</td></tr><tr><td>Marqués de Murrieta Capellanía <small style="opacity:.6">white</small></td><td>0.365</td><td>0.309</td></tr><tr><td>Vega Sicilia Único <small style="opacity:.6">red</small></td><td>0.237</td><td>0.324</td></tr><tr><td>Pazo de Señoráns Albariño</td><td colspan="2"><i>not in our catalog</i></td></tr></tbody></table>
 
 Note:
-- Same two questionnaires, same list, against production after the re-embed
-- Same reading as before: each cell is the `<=>` distance between that wine and that taste profile, lower = closer, 🥇 = the one we recommend
-- Bold: the 4 reds now come before every white. Aalto wins at 0.203; the best white is at 0.265
-- White: Arzuaga Fan D.Oro wins at 0.196, then Muga Blanco and the Verdejo; the best red is at 0.274
-- Capellanía is the odd one: a white Reserva aged in oak, and its description reads closer to a structured wine than to "light and fruity", so it lands behind three reds. The vector reads style, not just colour
-- The winner's lead over the best wine of the other colour went from 0.03–0.04 to 0.06–0.08
-- And with the colour rule, the recommendation would pick a white for the white taste even if the vector had not
-- Next: where that list of wines comes from: a photo
+- Same questionnaires, same list, production after the re-embed
+- **Colours split**: for bold, all 4 reds come before any white. For white, three whites on top
+- **Lead doubled**: the winner beats the other colour by 0.06–0.08, was 0.03–0.04
+- **Odd one, Capellanía**: a white aged in oak that reads "structured", so it lands behind three reds. The vector reads style, not just colour
+- And the colour rule would pick a white for the white taste anyway
+- Next: where that list comes from, a photo
 
 
 
@@ -337,12 +338,9 @@ Note:
 - The model answers `{"wines":[{"winery","cuvee","colour"}]}`, enforced by the JSON schema we passed to langchain4j
 - The image text is treated as data: a wine list could contain "ignore the rules" (prompt injection)
 - If it doesn't parse, we fail with an error: no regex over free text
-
-
-
-### Capping the image size
-<img src="https://media.giphy.com/media/s4NKFTZ1igbn2/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: tiny Remy next to a huge bottle">
 ---
+**Capping the image size**
+
 <img src="imgs/resize.svg" style="width:860px; margin:0" alt="A 4032 by 3024 phone photo is shrunk so its longest side is 1024 pixels, about 15 times fewer pixels">
 
 Note:
