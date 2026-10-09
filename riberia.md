@@ -175,16 +175,19 @@ Note:
 - Embedding models are not all equal once you leave English
 - Vector size = storage and search cost
 - Running locally means no per-call cost and the data stays with us
+- bge-m3 can also produce sparse and multi-vector outputs (good at exact words like "albariño"), but through Ollama we only get the dense vector
+- No `query:` / `passage:` prefixes needed: some models (e5, nomic) expect them for short queries vs long documents. Check this before switching models
 ---
 **What we embed**
 
 <img src="imgs/embed-both.svg" style="width:880px; margin:0" alt="Wine descriptions in English and the taste questionnaire in Spanish both go through bge-m3 and are compared with the cosine operator">
 
 Note:
-- Wines: the description of every wine is embedded once and stored in `wines.embedding`
-- Users: the answers of the taste questionnaire are embedded when they ask for a recommendation
+- Wines: colour, region and description of every wine, embedded once and stored in `wines.embedding`
+- Users: only the answers of the taste questionnaire, embedded when they fill it in
 - Both go through the same model, so they land in the same space
 - The wine descriptions come from Vivino, in English. The answers are in Spanish. That is why the model matters
+- We now frame the wine in Spanish too ("Vino blanco. Región: …") with the English description after it: bge-m3 handles the mix, an English-only model would not
 ---
 **My case: nomic → bge-m3**
 
@@ -194,26 +197,26 @@ Note:
 - I started with `nomic-embed-text`: English only, so Spanish answers never matched English descriptions
 - Switched to `bge-m3`: multilingual, both languages share one vector space
 - Careful: vectors from different models are not comparable, so changing model = recomputing every embedding
+- Changing *what* you embed is the same: we added `POST /wines/reembed` to recompute everything (1035 wines in ~7 minutes)
 ---
 **The same, in our code**
 ```scala
 // a wine, once, when it enters the catalog
 val wineText =
-  s"Wine Color: $colour, " +
-  s"Pairing: $winePairing, " +
-  s"Description: $description"
+  s"Vino $colour. Región: $region. $description"
 IO.blocking(embeddingModel.embed(wineText))
 
-// the user, from the questionnaire
+// the user: only the answers, no questions
 val tasteText = responses
-  .map((question, answers) => s"${question.text} $answers")
-  .mkString("\n")
+  .map((label, answers) => s"$label: $answers")
+  .mkString(". ")  // "Vino blanco. Dulzor: …"
 IO.blocking(embeddingModel.embed(tasteText))
 ```
 
 Note:
-- Real code from `EmbeddingGenerator.scala` (trimmed)
-- The wine text is in English (from Vivino); the taste text is in Spanish, e.g. "¿Cómo te gusta la textura del vino en la boca? Denso, con peso y carácter"
+- Real code from `EmbeddingText` in `EmbeddingGenerator.scala` (trimmed)
+- The first version embedded "Wine Color: …, Pairing: …, Description: …" and, for the user, every question followed by its answer. More on why that changed in a minute
+- The description is still in English (from Vivino); the rest is in Spanish, e.g. "Cuerpo: Denso, con peso y carácter"
 - `IO.blocking` because langchain4j is a blocking Java call
 - Both results are 1024 numbers that we can now compare
 
@@ -254,8 +257,43 @@ Note:
 - Numbers are the `<=>` distance (lower = closer). Pazo de Señoráns is not in the catalog, so it goes to the wanted-wines backlog
 - Now the winners differ: Aalto for the bold taste, the Ontañón Verdejo for the white one. Whites move up for the white taste, reds for the bold one
 - That only happened once the catalog had whites: we added the Rioja whites from Vivino. With only Ribera reds, both tastes got Aalto
-- The honest lesson: the gaps are still small (0.29 to 0.39). Descriptions are marketing text that look alike
-- RAG is only as good as the data you retrieve from: better data → better recommendations
+- The honest lesson: the gaps are still small (0.29 to 0.39). The winner beats the best wine of the other colour by only 0.03–0.04
+- RAG is only as good as the data you retrieve from, and as what you choose to embed
+---
+**Removing the noise**
+
+<div class="cards"><div class="card"><span class="big">🍖</span><b>No pairing</b>"Beef, Lamb" was a third of every wine's text</div><div class="card"><span class="big">❓</span><b>No questions</b>the profile was mostly the same question text for everyone</div><div class="card hot"><span class="big">🍷</span><b>Colour is a rule</b>filter first, then rank by cosine</div></div>
+
+<table style="font-size:0.5em"><thead><tr><th></th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>Profile: advantage of the colour it asked for</td><td>0.004 – 0.019</td><td><b>0.040 – 0.077</b></td></tr><tr><td>two whites</td><td>0.078</td><td>0.124</td></tr><tr><td>two reds</td><td>0.131</td><td>0.144</td></tr><tr><td>a white vs a red</td><td>0.230</td><td>0.249</td></tr></tbody></table>
+
+<small style="opacity:.7; font-size:.45em">mean <code>&lt;=&gt;</code> = 1 − cosine · lower = closer · we want the last row well above the two before it</small>
+
+<span style="font-size:.8em">Compare rankings and gaps, not absolute values</span>
+
+Note:
+- Pairing: the questionnaire never asks about food, so "Beef, Lamb" vs "Fish, Seafood" only added noise to the comparison with the profile
+- Questions: every user shared the same long question text; the answers were a few words at the end. All profiles looked alike
+- Colour: as one word inside an embedding it barely moved the vector. Now the colour asked for in the questionnaire narrows the candidates (never to nothing) and cosine ranks inside that colour
+- Numbers: mean `<=>` from `scripts/embedding-separation.sql` on production, before and after re-embedding 1035 wines and the profiles
+- How to read them: `<=>` is 1 - cosine, so 0 = same direction and lower = closer
+- "two whites", "two reds": average distance between two wines of the same colour (how alike the whites are among themselves). "a white vs a red": average distance between a white and a red. You want the last one clearly bigger than the first two
+- "Advantage of the colour it asked for": for each profile, distance to the average red minus distance to the average white (or the other way round for a red profile). How much closer it is to its own colour. Bigger = the vector alone already points to the right colour
+- The win is on the profile side: each profile is now 3 to 10 times further ahead for its own colour, and that is what decides a recommendation
+- Honest part: between wines the gap did not open. Without the pairing the whites look less alike, so white↔white grew more than white↔red
+- bge-m3 keeps almost any two wine texts within ~0.1 to 0.4 of each other. Cleaner text widens the gaps, it will never give you 0.1 vs 0.9. That is why colour became a rule instead of a hope
+---
+**Same list, after the change** <small style="opacity:.7">(<code>&lt;=&gt;</code>, lower = closer)</small>
+
+<table style="font-size:0.5em"><thead><tr><th>Wine on the list</th><th>🔥 Bold taste</th><th>🥂 White taste</th></tr></thead><tbody><tr><td><b>Arzuaga Fan D.Oro</b> <small style="opacity:.6">white</small></td><td>0.265</td><td><b>0.196</b> 🥇</td></tr><tr><td>Muga Blanco <small style="opacity:.6">white</small></td><td>0.299</td><td>0.209</td></tr><tr><td>Ontañón Dominio de la Abadesa Verdejo <small style="opacity:.6">white</small></td><td>0.316</td><td>0.221</td></tr><tr><td>Condado de Haza Crianza <small style="opacity:.6">red</small></td><td>0.210</td><td>0.274</td></tr><tr><td><b>Aalto</b> <small style="opacity:.6">red</small></td><td><b>0.203</b> 🥇</td><td>0.285</td></tr><tr><td>Emilio Moro Malleolus <small style="opacity:.6">red</small></td><td>0.216</td><td>0.293</td></tr><tr><td>Marqués de Murrieta Capellanía <small style="opacity:.6">white</small></td><td>0.365</td><td>0.309</td></tr><tr><td>Vega Sicilia Único <small style="opacity:.6">red</small></td><td>0.237</td><td>0.324</td></tr><tr><td>Pazo de Señoráns Albariño</td><td colspan="2"><i>not in our catalog</i></td></tr></tbody></table>
+
+Note:
+- Same two questionnaires, same list, against production after the re-embed
+- Same reading as before: each cell is the `<=>` distance between that wine and that taste profile, lower = closer, 🥇 = the one we recommend
+- Bold: the 4 reds now come before every white. Aalto wins at 0.203; the best white is at 0.265
+- White: Arzuaga Fan D.Oro wins at 0.196, then Muga Blanco and the Verdejo; the best red is at 0.274
+- Capellanía is the odd one: a white Reserva aged in oak, and its description reads closer to a structured wine than to "light and fruity", so it lands behind three reds. The vector reads style, not just colour
+- The winner's lead over the best wine of the other colour went from 0.03–0.04 to 0.06–0.08
+- And with the colour rule, the recommendation would pick a white for the white taste even if the vector had not
 - Next: where that list of wines comes from: a photo
 
 
@@ -340,7 +378,7 @@ Note:
 - Oracle Cloud Always Free ARM VM (2 OCPU, 12 GB): the only free tier that runs the whole stack
 - Everything is one docker compose; the bot needs no inbound connectivity (it polls Telegram)
 - The vision model is not on the VM: it goes to Ollama Cloud, so no GPU and no heavy model to pull
-- The small local Ollama only serves bge-m3, so the existing embeddings stay valid (no re-embedding)
+- The small local Ollama only serves bge-m3, so the existing embeddings stay valid when the chat model changes. Changing the embedded text did need one re-embed (`POST /wines/reembed`)
 ---
 **How a deploy works**
 
