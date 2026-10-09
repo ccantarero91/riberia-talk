@@ -209,7 +209,7 @@ IO.blocking(embeddingModel.embed(wineText))
 // the user: only the answers, no questions
 val tasteText = responses
   .map((label, answers) => s"$label: $answers")
-  .mkString(". ")   // "Vino blanco. Dulzor: Seco… Cuerpo: Ligero…"
+  .mkString(". ")  // "Vino blanco. Dulzor: …"
 IO.blocking(embeddingModel.embed(tasteText))
 ```
 
