@@ -419,6 +419,14 @@ Note:
 - Now that we've seen every piece, let's see them working together
 - Telegram bot: answer the taste questionnaire, then send a photo of a wine list → recommendation
 - Hopefully the audience reacts like Ego 🙂
+---
+**Try it yourself**
+
+<div class="intro"><img src="imgs/telegram-qr.png" style="height:420px; margin:0" alt="Telegram QR code for @RiberiaBot"><ul class="plain"><li>💬 <a href="https://t.me/RiberiaBot">t.me/RiberiaBot</a></li><li>📝 Answer the taste questions</li><li>📸 Send a photo of a wine list</li><li>🍷 Get your pick</li></ul></div>
+
+Note:
+- Leave this up during the demo so people can scan it and follow along on their phones
+- Same flow I'm showing: questionnaire first, then a photo of a wine list
 
 
 
@@ -471,7 +479,9 @@ Note:
 
 
 ### Questions?
-<img src="https://media.giphy.com/media/X5IdLx65T9Kpqg17fh/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Anton Ego writing his review at the typewriter">
+<img src="https://media.giphy.com/media/X5IdLx65T9Kpqg17fh/giphy.gif" style="height:320px; margin:0" alt="Ratatouille: Anton Ego writing his review at the typewriter">
+
+<p style="font-size:0.55em">🎞️ Slides: <a href="https://ccantarero91.github.io/riberia-talk/">ccantarero91.github.io/riberia-talk</a> · 💻 Code: <a href="https://github.com/ccantarero91/riberia-talk">github.com/ccantarero91/riberia-talk</a> · 🤖 <a href="https://t.me/RiberiaBot">t.me/RiberiaBot</a></p>
 
 Note:
 - Your review, please: questions, critiques, wine suggestions
