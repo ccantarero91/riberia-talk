@@ -263,6 +263,36 @@ Note:
 - Cosine measures the angle between vectors, not their length (the arrows from the cats and dogs)
 - A short and a long review of the same wine point the same way: Euclidean says they are far apart, cosine says they are identical. We care about what the text talks about, not how much it says
 ---
+**Vector indexes are special**
+
+<div class="cards"><div class="card"><span class="big">🌳</span><b>B-tree</b>sorts one value: <code>price &lt; 20</code>. 1024 numbers have no order</div><div class="card"><span class="big">🐢</span><b>No index</b>compare with every row: exact, but O(n)</div><div class="card hot"><span class="big">🎯</span><b>ANN</b>approximate nearest neighbours: fast, may miss one</div></div>
+
+Note:
+- A normal index works because values can be sorted: give me prices under 20, jump to that part of the tree
+- A vector has 1024 dimensions: there is no "smaller" or "bigger", only "closer"
+- Without an index Postgres compares your vector with every row. Exact, but it grows with the table
+- Vector indexes trade a bit of accuracy for speed: Approximate Nearest Neighbours. They can miss the true closest one
+---
+**HNSW: a map with motorways**
+
+<img src="imgs/hnsw.svg" style="width:780px; margin:0" alt="Three layers of a graph: start at the sparse top layer, jump towards the query, drop to the next layer, and finish next to the closest node in the bottom layer, which has every wine">
+
+```sql
+CREATE INDEX ON cellar.wines
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+Note:
+- HNSW = Hierarchical Navigable Small World. Think motorways, main roads and streets
+- Every wine is in the bottom layer; only a few go up. You start at the top, jump towards your vector, go down a layer and repeat
+- A few hops instead of a thousand comparisons
+- The alternative, IVFFlat, splits the vectors into clusters and searches only the nearest ones. Faster to build, but you have to create it after loading data, and recall is worse
+- Gotchas:
+  - the operator class must match the operator: `vector_cosine_ops` ↔ `<=>`, or the index is not used
+  - tune `hnsw.ef_search` (default 40): higher = more accurate, slower
+  - `WHERE` + `LIMIT` on top of an index can return fewer rows than asked (pgvector 0.8 adds iterative scans)
+- Honest part: with 1035 wines and `WHERE id IN (...)` over ~10 wines from the list, Postgres doesn't even need it. It matters with hundreds of thousands of rows
+---
 **The real query**
 ```sql
 SELECT id, name, winery, colour, ...
@@ -477,6 +507,18 @@ Note:
 
 Note:
 - Like Linguini and Remy: I'm the one in the kitchen, but I didn't cook alone
+---
+**A recommender, before and now**
+
+<table style="font-size:0.55em"><thead><tr><th></th><th>🔎 Before: Elasticsearch & co.</th><th>🧮 Now: embeddings</th></tr></thead><tbody><tr><td>Matching</td><td>keywords: "afrutado" ≠ "fruity"</td><td>meaning, in any language</td></tr><tr><td>Tuning</td><td>synonyms, analyzers, boosts by hand</td><td>choose what text you embed</td></tr><tr><td>New users</td><td>collaborative filtering needs history</td><td>a short questionnaire is enough</td></tr><tr><td>Infra</td><td>a search cluster next to your DB</td><td>one column in Postgres</td></tr></tbody></table>
+
+Note:
+- Before, a "find me something like this" meant a search engine like Elasticsearch: tokenizers, synonym lists, boosting fields, and lots of tuning
+- Or a classic recommender (collaborative filtering), which needs many users and their history before it recommends anything
+- With embeddings, the model already "understands" the text: the description of a wine and the answers of a user land in the same space
+- The work moves from tuning the engine to choosing what to embed, which is what we did with the noise
+- To be fair: Elasticsearch also does vector search today, and keywords still win for exact names. That's why we match wine names first and rank by meaning after
+- For a side project, it's the difference between "too big to try" and "a weekend"
 ---
 **Built alongside GenAI**
 
