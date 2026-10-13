@@ -8,6 +8,17 @@ Note:
 - I was also taking a course on this stuff, so I built the recommender
 - The idea: you take a photo of the restaurant's wine list and the bot tells you what to order, based on your taste
 - The whole backend is Scala 3 (smithy4s, http4s and a Telegram bot). Postgres is the only database, Ollama runs the models
+---
+**The problem: a restaurant, a wine list, and me**
+
+<div class="cards"><div class="card"><span class="big">📜</span><b>Pages of wines</b>Dozens of names, regions and grapes I don't recognise</div><div class="card"><span class="big">😳</span><b>Too shy to ask</b>Asking the waiter feels like admitting I know nothing</div><div class="card"><span class="big">🎲</span><b>So I play it safe</b>The Ribera I already know, or the second cheapest</div><div class="card hot"><span class="big">📸</span><b>What if…</b>A photo of the list and a pick that matches <i>my</i> taste?</div></div>
+
+Note:
+- Raise your hand if this has happened to you: you sit down, they hand you the wine list, and it's three pages of names you've never heard of
+- You could ask the waiter or the sommelier, but it's a bit embarrassing: you don't know the vocabulary and you don't want to look clueless
+- So you end up ordering what you always order, or the second cheapest bottle, and you never discover anything new
+- What I wanted: someone who knows my taste, looks at *this* list, and quietly tells me what to order
+- That "someone who whispers in your ear" is exactly what a RAG is, which brings us to Ratatouille
 
 
 
@@ -430,7 +441,7 @@ Note:
 ---
 **What I take away**
 
-<div class="cards"><div class="card"><span class="big">⏱️</span><b>A multiplier</b>Little free time, a lot built</div><div class="card"><span class="big">🛡️</span><b>Scala = guardrails</b>Strong types, errors at compile time</div><div class="card hot"><span class="big">🧰</span><b>Workflow & harness</b>The AI is only as good as its loop</div></div>
+<div class="cards"><div class="card"><span class="big">⏱️</span><b>A multiplier</b>Little free time, a lot built</div><div class="card"><span class="big">🛡️</span><b>Scala = guardrails</b>Strong types, errors at compile time</div><div class="card hot"><span class="big">🧰</span><b>Workflow & harness</b>The AI is only as good as its loop</div><div class="card hot"><span class="big">📖</span><b>Keep learning</b>AI and software architecture, to keep up with the pace of change</div></div>
 
 Note:
 - AI is a multiplier for people like me with little time for side projects: without it, I would never have built something like this
@@ -438,6 +449,24 @@ Note:
 - Opaque types, smithy4s contracts, tagless final: when the AI gets it wrong, the compiler says so before production does
 - The workflow and the harness matter most: AGENTS.md, tests, formatting, CI, tools like Metals MCP
 - The better the feedback loop, the better the AI works
+- And keep learning: AI tools change every few months, and so does how we build software with them
+- Reading about AI *and* about software architecture is what lets you keep up: good design is what makes the AI's code reviewable and changeable
+- Which is why the next slide is where I learned all this
+
+---
+**Where I learned it**
+
+<div class="cards"><div class="card hot"><span class="big">🦙</span><b>Añade IA siguiendo buenas prácticas</b>Ollama, models vs LangChain, AI in a real app</div><div class="card hot"><span class="big">🕵️</span><b>IA: Embeddings y RAG</b>Semantic search and RAG with Postgres operators</div><div class="card hot"><span class="big">🏠</span><b>IA en local</b>Privacy and scalability: running models yourself</div></div>
+
+<p style="font-size:0.6em">Codely courses (in Spanish) · plus their YouTube videos · codely.com</p>
+
+Note:
+- Most of what you've seen I learned from three Codely courses, all in Spanish
+- "Añade Inteligencia Artificial siguiendo buenas prácticas": Ollama, and the difference between models, Ollama and LangChain, applied with good software design
+- "IA: Embeddings y RAG": what semantic search and embeddings are, and doing RAG with Postgres operators like `<=>`
+- "IA en local: Privacidad y escalabilidad": running models locally, Ollama vs LM Studio vs Docker Models
+- Each course has short companion videos on Codely's YouTube channel, a good starting point
+- The rest came from the langchain4j, pgvector and Ollama docs, and a lot of trial and error
 
 
 
