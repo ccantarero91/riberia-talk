@@ -123,6 +123,23 @@ Note:
 - It gives us the models as plain objects: `EmbeddingModel` and `ChatModel`
 - Changing provider is a config change, not a code change. Locally everything was Ollama; in production the vision model is Ollama Cloud
 ---
+**Copy-paste: `build.sbt`**
+```scala
+libraryDependencies ++= Seq(
+  "dev.langchain4j" % "langchain4j"         % "1.22.0",
+  "dev.langchain4j" % "langchain4j-ollama"  % "1.22.0",
+  "dev.langchain4j" % "langchain4j-open-ai" % "1.22.0",
+  "org.typelevel" %% "doobie-postgres" % "1.0.0-RC13",
+  "com.sksamuel.scrimage" % "scrimage-core" % "4.6.8"
+)
+```
+
+Note:
+- Everything you need to reproduce this talk, and nothing else
+- Plain Java artifacts for langchain4j (`%`, not `%%`): they work from Scala as they are
+- `langchain4j-open-ai` only if you use a provider with the OpenAI API (Ollama Cloud, Groq, OpenAI)
+- All the code in the slides compiles in `modules/code` of the talk repo: link on the last slide
+---
 **Building the models**
 ```scala
 val embeddingModel = OllamaEmbeddingModel.builder()
@@ -349,6 +366,31 @@ Note:
 - The model answers `{"wines":[{"winery","cuvee","colour"}]}`, enforced by the JSON schema we passed to langchain4j
 - The image text is treated as data: a wine list could contain "ignore the rules" (prompt injection)
 - If it doesn't parse, we fail with an error: no regex over free text
+---
+**Copy-paste: the JSON schema**
+```scala
+val wine = JsonObjectSchema.builder()
+  .addStringProperty("winery").addStringProperty("cuvee")
+  .addEnumProperty("colour", List("tinto", "blanco").asJava)
+  .required("winery", "cuvee", "colour").build()
+
+val wines = JsonObjectSchema.builder()
+  .addProperty("wines",
+    JsonArraySchema.builder().items(wine).build())
+  .required("wines").build()
+
+val responseFormat = ResponseFormat.builder()
+  .`type`(ResponseFormatType.JSON)
+  .jsonSchema(JsonSchema.builder()
+    .name("WineList").rootElement(wines).build())
+  .build()
+```
+
+Note:
+- This is what goes into `.responseFormat(...)` when we build the chat model
+- The model can't answer with free text: it has to produce `{"wines":[...]}` with exactly these fields
+- The enum for the colour saves us from "Tinto", "red", "tinto crianza"...
+- Then `parser.decode[Menu](json)` with circe and we have typed data. Full version in `MenuOcr.scala` in the repo
 ---
 **Capping the image size**
 

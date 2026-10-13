@@ -1,22 +1,20 @@
 package com.lambdarat.riberia
 
 import cats.effect.IO
-import io.circe.Codec
-import org.http4s.*
-import org.http4s.circe.CirceEntityCodec.given
-import org.http4s.client.Client
+import dev.langchain4j.model.embedding.EmbeddingModel
 
-final case class EmbedRequest(model: String, input: String) derives Codec.AsObject
-final case class EmbedResponse(embeddings: List[List[Float]]) derives Codec.AsObject
-
-/** Minimal embeddings client for Ollama (`/api/embed`). */
-final class Embeddings(client: Client[IO], ollama: Uri, model: String = "bge-m3"):
+/** Turns text into a vector. langchain4j is blocking, hence `IO.blocking`. */
+final class Embeddings(model: EmbeddingModel):
 
   def embed(text: String): IO[Vector[Float]] =
-    val req = Request[IO](Method.POST, ollama / "api" / "embed")
-      .withEntity(EmbedRequest(model, text))
+    IO.blocking(model.embed(text).content().vector().toVector)
 
-    client
-      .expect[EmbedResponse](req)
-      .flatMap(r => IO.fromOption(r.embeddings.headOption)(new NoSuchElementException("Ollama returned 0 embeddings")))
-      .map(_.toVector)
+object Embeddings:
+
+  /** What we embed for a wine: only what describes its taste, no labels like "Wine Color:". */
+  def wineText(colour: String, region: String, description: String): String =
+    s"Vino $colour. Región: $region. $description"
+
+  /** What we embed for a user: only their answers, never the questions. */
+  def tasteText(answers: List[(String, String)]): String =
+    answers.map((label, answer) => s"$label: $answer").mkString(". ")
