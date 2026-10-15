@@ -2,13 +2,15 @@ ThisBuild / scalaVersion := "3.3.8" // LTS
 
 lazy val commonSettings = Seq(
   libraryDependencies ++= Seq(
-    "org.typelevel" %% "cats-effect"         % "3.7.1",
-    "org.http4s"    %% "http4s-ember-client" % "0.23.38",
-    "org.http4s"    %% "http4s-circe"        % "0.23.38",
-    "io.circe"      %% "circe-core"          % "0.14.16",
-    "io.circe"      %% "circe-parser"        % "0.14.16",
-    "org.typelevel" %% "doobie-core"         % "1.0.0-RC13",
-    "org.typelevel" %% "doobie-postgres"     % "1.0.0-RC13"
+    "org.typelevel"       %% "cats-effect"          % "3.7.1",
+    "io.circe"            %% "circe-core"           % "0.14.16",
+    "io.circe"            %% "circe-parser"         % "0.14.16",
+    "org.typelevel"       %% "doobie-core"          % "1.0.0-RC13",
+    "org.typelevel"       %% "doobie-postgres"      % "1.0.0-RC13",
+    "dev.langchain4j"      % "langchain4j"          % "1.22.0",
+    "dev.langchain4j"      % "langchain4j-ollama"   % "1.22.0",
+    "dev.langchain4j"      % "langchain4j-open-ai"  % "1.22.0",
+    "com.sksamuel.scrimage" % "scrimage-core"       % "4.6.8"
   )
 )
 

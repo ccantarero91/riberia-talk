@@ -8,6 +8,17 @@ Note:
 - I was also taking a course on this stuff, so I built the recommender
 - The idea: you take a photo of the restaurant's wine list and the bot tells you what to order, based on your taste
 - The whole backend is Scala 3 (smithy4s, http4s and a Telegram bot). Postgres is the only database, Ollama runs the models
+---
+**The problem: a restaurant, a wine list, and me**
+
+<div class="cards"><div class="card"><span class="big">📜</span><b>Pages of wines</b>Dozens of names, regions and grapes I don't recognise</div><div class="card"><span class="big">😳</span><b>Too shy to ask</b>Asking the waiter feels like admitting I know nothing</div><div class="card"><span class="big">🎲</span><b>So I play it safe</b>The Ribera I already know, or the second cheapest</div><div class="card hot"><span class="big">📸</span><b>What if…</b>A photo of the list and a pick that matches <i>my</i> taste?</div></div>
+
+Note:
+- Raise your hand if this has happened to you: you sit down, they hand you the wine list, and it's three pages of names you've never heard of
+- You could ask the waiter or the sommelier, but it's a bit embarrassing: you don't know the vocabulary and you don't want to look clueless
+- So you end up ordering what you always order, or the second cheapest bottle, and you never discover anything new
+- What I wanted: someone who knows my taste, looks at *this* list, and quietly tells me what to order
+- That "someone who whispers in your ear" is exactly what a RAG is, which brings us to Ratatouille
 
 
 
@@ -111,6 +122,23 @@ Note:
 - The Java library for LLMs (the JVM's LangChain); from Scala we just call it inside `IO.blocking`
 - It gives us the models as plain objects: `EmbeddingModel` and `ChatModel`
 - Changing provider is a config change, not a code change. Locally everything was Ollama; in production the vision model is Ollama Cloud
+---
+**Copy-paste: `build.sbt`**
+```scala
+libraryDependencies ++= Seq(
+  "dev.langchain4j" % "langchain4j"         % "1.22.0",
+  "dev.langchain4j" % "langchain4j-ollama"  % "1.22.0",
+  "dev.langchain4j" % "langchain4j-open-ai" % "1.22.0",
+  "org.typelevel" %% "doobie-postgres" % "1.0.0-RC13",
+  "com.sksamuel.scrimage" % "scrimage-core" % "4.6.8"
+)
+```
+
+Note:
+- Everything you need to reproduce this talk, and nothing else
+- Plain Java artifacts for langchain4j (`%`, not `%%`): they work from Scala as they are
+- `langchain4j-open-ai` only if you use a provider with the OpenAI API (Ollama Cloud, Groq, OpenAI)
+- All the code in the slides compiles in `modules/code` of the talk repo: link on the last slide
 ---
 **Building the models**
 ```scala
@@ -235,6 +263,36 @@ Note:
 - Cosine measures the angle between vectors, not their length (the arrows from the cats and dogs)
 - A short and a long review of the same wine point the same way: Euclidean says they are far apart, cosine says they are identical. We care about what the text talks about, not how much it says
 ---
+**Vector indexes are special**
+
+<div class="cards"><div class="card"><span class="big">🌳</span><b>B-tree</b>sorts one value: <code>price &lt; 20</code>. 1024 numbers have no order</div><div class="card"><span class="big">🐢</span><b>No index</b>compare with every row: exact, but O(n)</div><div class="card hot"><span class="big">🎯</span><b>ANN</b>approximate nearest neighbours: fast, may miss one</div></div>
+
+Note:
+- A normal index works because values can be sorted: give me prices under 20, jump to that part of the tree
+- A vector has 1024 dimensions: there is no "smaller" or "bigger", only "closer"
+- Without an index Postgres compares your vector with every row. Exact, but it grows with the table
+- Vector indexes trade a bit of accuracy for speed: Approximate Nearest Neighbours. They can miss the true closest one
+---
+**HNSW: a map with motorways**
+
+<img src="imgs/hnsw.svg" style="width:780px; margin:0" alt="Three layers of a graph: start at the sparse top layer, jump towards the query, drop to the next layer, and finish next to the closest node in the bottom layer, which has every wine">
+
+```sql
+CREATE INDEX ON cellar.wines
+  USING hnsw (embedding vector_cosine_ops);
+```
+
+Note:
+- HNSW = Hierarchical Navigable Small World. Think motorways, main roads and streets
+- Every wine is in the bottom layer; only a few go up. You start at the top, jump towards your vector, go down a layer and repeat
+- A few hops instead of a thousand comparisons
+- The alternative, IVFFlat, splits the vectors into clusters and searches only the nearest ones. Faster to build, but you have to create it after loading data, and recall is worse
+- Gotchas:
+  - the operator class must match the operator: `vector_cosine_ops` ↔ `<=>`, or the index is not used
+  - tune `hnsw.ef_search` (default 40): higher = more accurate, slower
+  - `WHERE` + `LIMIT` on top of an index can return fewer rows than asked (pgvector 0.8 adds iterative scans)
+- Honest part: with 1035 wines and `WHERE id IN (...)` over ~10 wines from the list, Postgres doesn't even need it. It matters with hundreds of thousands of rows
+---
 **The real query**
 ```sql
 SELECT id, name, winery, colour, ...
@@ -339,6 +397,31 @@ Note:
 - The image text is treated as data: a wine list could contain "ignore the rules" (prompt injection)
 - If it doesn't parse, we fail with an error: no regex over free text
 ---
+**Copy-paste: the JSON schema**
+```scala
+val wine = JsonObjectSchema.builder()
+  .addStringProperty("winery").addStringProperty("cuvee")
+  .addEnumProperty("colour", List("tinto", "blanco").asJava)
+  .required("winery", "cuvee", "colour").build()
+
+val wines = JsonObjectSchema.builder()
+  .addProperty("wines",
+    JsonArraySchema.builder().items(wine).build())
+  .required("wines").build()
+
+val responseFormat = ResponseFormat.builder()
+  .`type`(ResponseFormatType.JSON)
+  .jsonSchema(JsonSchema.builder()
+    .name("WineList").rootElement(wines).build())
+  .build()
+```
+
+Note:
+- This is what goes into `.responseFormat(...)` when we build the chat model
+- The model can't answer with free text: it has to produce `{"wines":[...]}` with exactly these fields
+- The enum for the colour saves us from "Tinto", "red", "tinto crianza"...
+- Then `parser.decode[Menu](json)` with circe and we have typed data. Full version in `MenuOcr.scala` in the repo
+---
 **Capping the image size**
 
 <img src="imgs/resize.svg" style="width:860px; margin:0" alt="A 4032 by 3024 phone photo is shrunk so its longest side is 1024 pixels, about 15 times fewer pixels">
@@ -408,6 +491,14 @@ Note:
 - Now that we've seen every piece, let's see them working together
 - Telegram bot: answer the taste questionnaire, then send a photo of a wine list → recommendation
 - Hopefully the audience reacts like Ego 🙂
+---
+**Try it yourself**
+
+<div class="intro"><img src="imgs/telegram-qr.png" style="height:420px; margin:0" alt="Telegram QR code for @RiberiaBot"><ul class="plain"><li>💬 <a href="https://t.me/RiberiaBot">t.me/RiberiaBot</a></li><li>📝 Answer the taste questions</li><li>📸 Send a photo of a wine list</li><li>🍷 Get your pick</li></ul></div>
+
+Note:
+- Leave this up during the demo so people can scan it and follow along on their phones
+- Same flow I'm showing: questionnaire first, then a photo of a wine list
 
 
 
@@ -416,6 +507,18 @@ Note:
 
 Note:
 - Like Linguini and Remy: I'm the one in the kitchen, but I didn't cook alone
+---
+**A recommender, before and now**
+
+<table style="font-size:0.55em"><thead><tr><th></th><th>🔎 Before: Elasticsearch & co.</th><th>🧮 Now: embeddings</th></tr></thead><tbody><tr><td>Matching</td><td>keywords: "afrutado" ≠ "fruity"</td><td>meaning, in any language</td></tr><tr><td>Tuning</td><td>synonyms, analyzers, boosts by hand</td><td>choose what text you embed</td></tr><tr><td>New users</td><td>collaborative filtering needs history</td><td>a short questionnaire is enough</td></tr><tr><td>Infra</td><td>a search cluster next to your DB</td><td>one column in Postgres</td></tr></tbody></table>
+
+Note:
+- Before, a "find me something like this" meant a search engine like Elasticsearch: tokenizers, synonym lists, boosting fields, and lots of tuning
+- Or a classic recommender (collaborative filtering), which needs many users and their history before it recommends anything
+- With embeddings, the model already "understands" the text: the description of a wine and the answers of a user land in the same space
+- The work moves from tuning the engine to choosing what to embed, which is what we did with the noise
+- To be fair: Elasticsearch also does vector search today, and keywords still win for exact names. That's why we match wine names first and rank by meaning after
+- For a side project, it's the difference between "too big to try" and "a weekend"
 ---
 **Built alongside GenAI**
 
@@ -430,7 +533,7 @@ Note:
 ---
 **What I take away**
 
-<div class="cards"><div class="card"><span class="big">⏱️</span><b>A multiplier</b>Little free time, a lot built</div><div class="card"><span class="big">🛡️</span><b>Scala = guardrails</b>Strong types, errors at compile time</div><div class="card hot"><span class="big">🧰</span><b>Workflow & harness</b>The AI is only as good as its loop</div></div>
+<div class="cards"><div class="card"><span class="big">⏱️</span><b>A multiplier</b>Little free time, a lot built</div><div class="card"><span class="big">🛡️</span><b>Scala = guardrails</b>Strong types, errors at compile time</div><div class="card hot"><span class="big">🧰</span><b>Workflow & harness</b>The AI is only as good as its loop</div><div class="card hot"><span class="big">📖</span><b>Keep learning</b>AI and software architecture, to keep up with the pace of change</div></div>
 
 Note:
 - AI is a multiplier for people like me with little time for side projects: without it, I would never have built something like this
@@ -438,11 +541,31 @@ Note:
 - Opaque types, smithy4s contracts, tagless final: when the AI gets it wrong, the compiler says so before production does
 - The workflow and the harness matter most: AGENTS.md, tests, formatting, CI, tools like Metals MCP
 - The better the feedback loop, the better the AI works
+- And keep learning: AI tools change every few months, and so does how we build software with them
+- Reading about AI *and* about software architecture is what lets you keep up: good design is what makes the AI's code reviewable and changeable
+- Which is why the next slide is where I learned all this
+
+---
+**Where I learned it**
+
+<div class="cards"><div class="card hot"><span class="big">🦙</span><b>Añade IA siguiendo buenas prácticas</b>Ollama, models vs LangChain, AI in a real app</div><div class="card hot"><span class="big">🕵️</span><b>IA: Embeddings y RAG</b>Semantic search and RAG with Postgres operators</div><div class="card hot"><span class="big">🏠</span><b>IA en local</b>Privacy and scalability: running models yourself</div></div>
+
+<p style="font-size:0.6em">Codely courses (in Spanish) · plus their YouTube videos · codely.com</p>
+
+Note:
+- Most of what you've seen I learned from three Codely courses, all in Spanish
+- "Añade Inteligencia Artificial siguiendo buenas prácticas": Ollama, and the difference between models, Ollama and LangChain, applied with good software design
+- "IA: Embeddings y RAG": what semantic search and embeddings are, and doing RAG with Postgres operators like `<=>`
+- "IA en local: Privacidad y escalabilidad": running models locally, Ollama vs LM Studio vs Docker Models
+- Each course has short companion videos on Codely's YouTube channel, a good starting point
+- The rest came from the langchain4j, pgvector and Ollama docs, and a lot of trial and error
 
 
 
 ### Questions?
-<img src="https://media.giphy.com/media/X5IdLx65T9Kpqg17fh/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Anton Ego writing his review at the typewriter">
+<img src="https://media.giphy.com/media/X5IdLx65T9Kpqg17fh/giphy.gif" style="height:320px; margin:0" alt="Ratatouille: Anton Ego writing his review at the typewriter">
+
+<p style="font-size:0.55em">🎞️ Slides: <a href="https://ccantarero91.github.io/riberia-talk/">ccantarero91.github.io/riberia-talk</a> · 💻 Code: <a href="https://github.com/ccantarero91/riberia-talk">github.com/ccantarero91/riberia-talk</a> · 🤖 <a href="https://t.me/RiberiaBot">t.me/RiberiaBot</a></p>
 
 Note:
 - Your review, please: questions, critiques, wine suggestions
