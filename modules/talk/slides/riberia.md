@@ -18,7 +18,41 @@ Note:
 - You could ask the waiter or the sommelier, but it's a bit embarrassing: you don't know the vocabulary and you don't want to look clueless
 - So you end up ordering what you always order, or the second cheapest bottle, and you never discover anything new
 - What I wanted: someone who knows my taste, looks at *this* list, and quietly tells me what to order
-- That "someone who whispers in your ear" is exactly what a RAG is, which brings us to Ratatouille
+- So I built it. Let me show you what it does before how it works
+---
+**What I built: Riberia, a Telegram bot**
+
+<p style="font-size:.55em; margin:10px 0">① <b>Your taste</b>: 6 questions, once &nbsp;→&nbsp; ② <b>from a list</b> or ③ <b>from a photo</b> &nbsp;→&nbsp; 🍷 <b>one pick</b></p>
+
+<div class="intro" style="gap:24px"><img src="imgs/telegram-profile.webp" style="height:360px; margin:0" alt="Telegram: the bot offers recommend from a list, from an image, or repeat the questionnaire, and asks question 1 of 6 about the wine type"><img src="imgs/telegram-photo.webp" style="height:360px; margin:0" alt="Telegram: the user sends a photo of a wine list and the bot recommends Remírez de Ganuza Rioja Reserva 2017, listing the wines it did not find in the cellar"></div>
+
+Note:
+- One step you do once, then two ways to ask for a recommendation
+- ① Taste profile: 6 questions with buttons (type of wine, sweetness, flavours, body, tannins, occasion)
+- ② From a list: you write the names of the wines on the menu
+- ③ From a photo: you send a picture of the wine list and the bot reads it
+- Either way you get one wine, the one closest to your taste, and the wines on the list we don't know yet
+- Behind it: a catalogue of ~1000 wines that we add once, with their descriptions
+- Let's see it live
+
+
+
+### Demo
+<img src="https://media.giphy.com/media/ZS3WXURfBE3ew/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Anton Ego tastes the ratatouille and goes back to his childhood">
+
+Note:
+- Live: open the bot, show the profile already filled in, then "Recomendar desde imagen" with a photo of a real wine list
+- Then "Recomendar desde lista" with a few names typed in, to show the second path
+- Backup if the network fails: the screenshots in the previous slide
+- Hopefully the audience reacts like Ego 🙂
+---
+**Try it yourself**
+
+<div class="intro"><img src="imgs/telegram-qr.png" style="height:420px; margin:0" alt="Telegram QR code for @RiberiaBot"><ul class="plain"><li>💬 <a href="https://t.me/RiberiaBot">t.me/RiberiaBot</a></li><li>📝 Answer the taste questions</li><li>📸 Send a photo of a wine list</li><li>🍷 Get your pick</li></ul></div>
+
+Note:
+- Scan it now and answer the 6 questions while I talk: by the end you can send a photo of any wine list
+- Same flow I just showed: questionnaire first, then a list or a photo
 
 
 
@@ -39,7 +73,40 @@ Note:
 - Instead of retraining it, we first look up what's relevant in our own database (Retrieve)
 - We paste it into the prompt next to the question (Augment)
 - And the model answers using that context (Generate)
-- The hard part is the R: how do we find what's "relevant"? That's the next block
+- Now let's map this onto what you just saw in the demo
+---
+**Riberia in RAG terms**
+
+<table style="font-size:0.5em"><thead><tr><th></th><th>What happens</th><th>Model</th></tr></thead><tbody><tr><td>🍾 <b>Add a wine</b> <small style="opacity:.6">once</small></td><td>its description → vector → Postgres</td><td>embeddings</td></tr><tr><td>📝 <b>Your taste</b> <small style="opacity:.6">once</small></td><td>your 6 answers → vector</td><td>embeddings</td></tr><tr><td>🔎 <b>Retrieve</b></td><td>wines on the list, ranked by cosine to your taste</td><td>none, just SQL</td></tr><tr><td>⌨️ <b>From a list</b></td><td>the names are already text</td><td><b>no LLM needed</b></td></tr><tr><td>📸 <b>From a photo</b></td><td>a vision model reads the list into text</td><td><b>LLM</b>, only to read</td></tr><tr><td>✍️ <b>Generate</b></td><td>—</td><td>not used</td></tr></tbody></table>
+
+Note:
+- Two operations happen once: adding wines to the catalogue and filling in your profile. Both just turn text into a vector
+- The recommendation itself is a search: take the wines on the list and sort them by how close they are to your taste. That is the R
+- From a list: the names are already text, so there is no LLM at all. Embeddings plus one SQL query
+- From a photo: the only difference is that first an LLM reads the image and gives us the names. Then it's the same search
+- So the LLM is on the input side, never writing the answer
+---
+**Where is the G?**
+
+<div class="cards"><div class="card hot"><span class="big">🔎</span><b>R: the core</b>search by meaning picks your wine</div><div class="card"><span class="big">🧩</span><b>A: the query</b>the wine list + your taste, together in one SQL</div><div class="card"><span class="big">🙈</span><b>G: not here</b>the LLM reads the photo, it never writes the pick</div><div class="card"><span class="big">➡️</span><b>Next step</b>hand the top 3 to an LLM: "explain why"</div></div>
+
+Note:
+- Honest part: strictly, Riberia is "RAG without the G"
+- The cosine decides, not a model. That makes it cheap, fast, deterministic and impossible to hallucinate a wine
+- Most of the value of a RAG is in the R: if you retrieve the wrong things, the best LLM can't save you
+- Adding the G is easy now: give the 3 closest wines to a chat model and ask it to explain the pick in your words
+- So the rest of the talk is about the R: searching by meaning
+---
+**The pieces**
+
+<img src="imgs/rag-pieces.svg" style="height:470px; margin:0" alt="The app talks to Postgres with pgvector and to an LLM, which uses an embedding model and a vision model, tagged with retrieve or augment">
+
+Note:
+- R: Postgres extended with pgvector is our vector database, and the embedding model turns text into vectors so we can search it
+- A: our Scala app glues it together and builds the query
+- The vision model only appears in the photo path: it reads, it doesn't answer (explained later)
+- langchain4j sits between our app and the models: we never call Ollama's HTTP API by hand
+- You don't need a new vector database if you already have Postgres
 
 
 
@@ -76,7 +143,31 @@ Note:
 - The query "a whitish cat" becomes the vector [-0.8, 0.6] and points almost at "white cat"
 - Cosine compares the angle: 1 = same direction, 0 = unrelated, -1 = opposite
 - Cosine similarity: white cat 0.99, black cat 0.14, white dog -0.14, black dog -0.99
-- pgvector's `<=>` returns 1 - cosine: 0.01, 0.86, 1.14, 1.99. Order ascending and the first result is the white cat
+- Next slide: the actual numbers
+---
+**The maths behind the arrow**
+
+<p style="font-size:.55em">cos(q, a) = (q · a) / (|q| · |a|) &nbsp;·&nbsp; q = [-0.8, 0.6], |q| = 1, |a| = √2 ≈ 1.41</p>
+
+<table style="font-size:0.5em"><thead><tr><th></th><th>a</th><th>q · a</th><th>cos</th><th><code>&lt;=&gt;</code> = 1 − cos</th></tr></thead><tbody><tr><td>⚪🐱 white cat</td><td>[-1, 1]</td><td>0.8 + 0.6 = 1.4</td><td><b>0.99</b></td><td><b>0.01</b> 🥇</td></tr><tr><td>⚫🐱 black cat</td><td>[-1, -1]</td><td>0.8 − 0.6 = 0.2</td><td>0.14</td><td>0.86</td></tr><tr><td>⚪🐶 white dog</td><td>[1, 1]</td><td>−0.8 + 0.6 = −0.2</td><td>−0.14</td><td>1.14</td></tr><tr><td>⚫🐶 black dog</td><td>[1, -1]</td><td>−0.8 − 0.6 = −1.4</td><td>−0.99</td><td>1.99</td></tr></tbody></table>
+
+Note:
+- Multiply coordinate by coordinate and add: that's the dot product
+- Divide by the lengths, so only the direction counts: 1.4 / 1.41 = 0.99
+- pgvector's `<=>` returns 1 − cosine, a distance: lower = closer
+- Order ascending, keep the first: the white cat
+- With 1024 dimensions it's exactly the same sum, just longer
+---
+**pgvector operators**
+
+<div class="cards"><div class="card"><span class="big"><code>&lt;-&gt;</code></span><b>Euclidean</b>straight-line distance</div><div class="card"><span class="big"><code>&lt;#&gt;</code></span><b>Inner product</b>(negative)</div><div class="card hot"><span class="big"><code>&lt;=&gt;</code></span><b>Cosine</b>the one we use</div></div>
+
+<img src="imgs/cosine-vs-euclidean.svg" style="height:220px; margin:20px 0 0" alt="Two arrows in the same direction with different lengths: far apart by Euclidean distance, identical by cosine">
+
+Note:
+- Why cosine and not the others?
+- Cosine measures the angle between vectors, not their length (the arrows from the cats and dogs)
+- A short and a long review of the same wine point the same way: Euclidean says they are far apart, cosine says they are identical. We care about what the text talks about, not how much it says
 ---
 **Now with wines**
 
@@ -96,23 +187,22 @@ Note:
 - With `bge-m3` each wine has 1024 coordinates instead of 2
 - The model learns the axes by itself: one dimension may mix "red", "astringent" and "oak" in a way no human would name
 - We never know what each dimension represents, we only know the distances make sense: similar wines are close
+---
+**What we embed**
+
+<img src="imgs/embed-both.svg" style="width:880px; margin:0" alt="Wine descriptions in English and the taste questionnaire in Spanish both go through bge-m3 and are compared with the cosine operator">
+
+Note:
+- Wines: colour, region and description of every wine, embedded once and stored in `wines.embedding`
+- Users: only the answers of the taste questionnaire, embedded when they fill it in
+- Both go through the same model, so they land in the same space
+- The wine descriptions come from Vivino, in English. The answers are in Spanish. That is why the model matters
+- We now frame the wine in Spanish too ("Vino blanco. Región: …") with the English description after it: bge-m3 handles the mix, an English-only model would not
 
 
 
 ### What do we need to build it?
 <img src="https://media.giphy.com/media/Xhfnu2973Wy2Y/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Remy and Linguini cooking together">
----
-**The pieces**
-
-<img src="imgs/rag-pieces.svg" style="height:470px; margin:0" alt="The app talks to Postgres with pgvector and to an LLM, which uses an embedding model and an answer model, each tagged with retrieve, augment or generate">
-
-Note:
-- Each piece maps to a letter of RAG
-- R: Postgres extended with pgvector is our vector database, and the embedding model turns text into vectors so we can search it
-- A: our Scala app glues it together and builds the prompt
-- G: the answer model writes the answer. In Riberia it's a vision model that reads the photo (explained later)
-- langchain4j sits between our app and the models: we never call Ollama's HTTP API by hand
-- You don't need a new vector database if you already have Postgres
 ---
 **langchain4j: how we talk to the LLM**
 
@@ -140,28 +230,22 @@ Note:
 - `langchain4j-open-ai` only if you use a provider with the OpenAI API (Ollama Cloud, Groq, OpenAI)
 - All the code in the slides compiles in `modules/code` of the talk repo: link on the last slide
 ---
-**Building the models**
+**Building the embedding model**
 ```scala
 val embeddingModel = OllamaEmbeddingModel.builder()
   .baseUrl(cfg.url)
   .modelName("bge-m3")
   .build()
 
-val chatModel = OpenAiChatModel.builder()
-  .baseUrl(cfg.url)
-  .apiKey(cfg.apiKey)
-  .modelName(cfg.model)
-  .temperature(0.0)
-  .responseFormat(WineNamesResponseFormat)
-  .build()
+val vector: Embedding =
+  embeddingModel.embed("Vino tinto. Región: Ribera…").content()
+// 1024 floats
 ```
 
 Note:
-- This is (trimmed) the real code in `Services.scala`
-- `OpenAiChatModel` because Ollama Cloud speaks the OpenAI API
-- Temperature 0: literal reading, no creativity
-- Provider `ollama` builds an `OllamaChatModel` with the same options; `openai` builds this one
-- `responseFormat` forces the answer to follow a JSON schema: we'll use it in the photo part
+- Trimmed from the real code in `Services.scala`
+- Ollama runs locally next to the app, so embeddings cost nothing per call
+- The chat model for the photo is built the same way: we'll see it in the photo part
 ---
 **Postgres + pgvector**
 
@@ -189,43 +273,6 @@ Note:
 - New `vector(n)` type, distance operators and indexes (HNSW / IVFFlat). Still plain SQL, transactions and joins
 - 1024 because that's the dimension of bge-m3
 - The HNSW index makes approximate search fast
-
-
-
-### Which model for embeddings?
-<img src="https://media.giphy.com/media/nJ2PObJA3EVgc/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Remy tasting">
----
-**What matters**
-
-<div class="cards"><div class="card"><span class="big">🌍</span><b>Language</b>does it understand Spanish?</div><div class="card"><span class="big">📏</span><b>Size</b>how many numbers per text</div><div class="card"><span class="big">💻</span><b>Local</b>can it run on our machine?</div></div>
-
-Note:
-- Embedding models are not all equal once you leave English
-- Vector size = storage and search cost
-- Running locally means no per-call cost and the data stays with us
-- bge-m3 can also produce sparse and multi-vector outputs (good at exact words like "albariño"), but through Ollama we only get the dense vector
-- No `query:` / `passage:` prefixes needed: some models (e5, nomic) expect them for short queries vs long documents. Check this before switching models
----
-**What we embed**
-
-<img src="imgs/embed-both.svg" style="width:880px; margin:0" alt="Wine descriptions in English and the taste questionnaire in Spanish both go through bge-m3 and are compared with the cosine operator">
-
-Note:
-- Wines: colour, region and description of every wine, embedded once and stored in `wines.embedding`
-- Users: only the answers of the taste questionnaire, embedded when they fill it in
-- Both go through the same model, so they land in the same space
-- The wine descriptions come from Vivino, in English. The answers are in Spanish. That is why the model matters
-- We now frame the wine in Spanish too ("Vino blanco. Región: …") with the English description after it: bge-m3 handles the mix, an English-only model would not
----
-**My case: nomic → bge-m3**
-
-<img src="imgs/multilingual.svg" style="width:880px; margin:0" alt="With nomic-embed-text the Spanish phrase lands far from its English equivalent; with bge-m3 they land together">
-
-Note:
-- I started with `nomic-embed-text`: English only, so Spanish answers never matched English descriptions
-- Switched to `bge-m3`: multilingual, both languages share one vector space
-- Careful: vectors from different models are not comparable, so changing model = recomputing every embedding
-- Changing *what* you embed is the same: we added `POST /wines/reembed` to recompute everything (1035 wines in ~7 minutes)
 ---
 **The same, in our code**
 ```scala
@@ -250,18 +297,21 @@ Note:
 
 
 
-### Embedding search with `<=>`
-<img src="https://media.giphy.com/media/MzJomB2lqeMYE/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: a swarm of rats searching the kitchen">
+### My case: language and indexes
+<img src="https://media.giphy.com/media/nJ2PObJA3EVgc/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Remy tasting">
 ---
-**pgvector operators**
+**My case: nomic → bge-m3**
 
-<div class="cards"><div class="card"><span class="big"><code>&lt;-&gt;</code></span><b>Euclidean</b>straight-line distance</div><div class="card"><span class="big"><code>&lt;#&gt;</code></span><b>Inner product</b>(negative)</div><div class="card hot"><span class="big"><code>&lt;=&gt;</code></span><b>Cosine</b>the one we use</div></div>
-
-<img src="imgs/cosine-vs-euclidean.svg" style="height:220px; margin:20px 0 0" alt="Two arrows in the same direction with different lengths: far apart by Euclidean distance, identical by cosine">
+<img src="imgs/multilingual.svg" style="width:880px; margin:0" alt="With nomic-embed-text the Spanish phrase lands far from its English equivalent; with bge-m3 they land together">
 
 Note:
-- Cosine measures the angle between vectors, not their length (the arrows from the cats and dogs)
-- A short and a long review of the same wine point the same way: Euclidean says they are far apart, cosine says they are identical. We care about what the text talks about, not how much it says
+- Choosing an embedding model: language (does it understand Spanish?), size (numbers per text = storage and search cost), and can it run locally
+- I started with `nomic-embed-text`: English only, so Spanish answers never matched English descriptions
+- Switched to `bge-m3`: multilingual, both languages share one vector space
+- Careful: vectors from different models are not comparable, so changing model = recomputing every embedding
+- bge-m3 can also produce sparse and multi-vector outputs, but through Ollama we only get the dense vector
+- No `query:` / `passage:` prefixes needed: some models (e5, nomic) expect them. Check this before switching models
+- Changing *what* you embed is the same: we added `POST /wines/reembed` to recompute everything (1035 wines in ~7 minutes)
 ---
 **Vector indexes are special**
 
@@ -292,6 +342,11 @@ Note:
   - tune `hnsw.ef_search` (default 40): higher = more accurate, slower
   - `WHERE` + `LIMIT` on top of an index can return fewer rows than asked (pgvector 0.8 adds iterative scans)
 - Honest part: with 1035 wines and `WHERE id IN (...)` over ~10 wines from the list, Postgres doesn't even need it. It matters with hundreds of thousands of rows
+
+
+
+### Putting it together
+<img src="https://media.giphy.com/media/MzJomB2lqeMYE/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: a swarm of rats searching the kitchen">
 ---
 **The real query**
 ```sql
@@ -365,12 +420,29 @@ Note:
 <img src="imgs/photo-flow.svg" style="width:900px; margin:0" alt="Photo of the wine list, vision model on Ollama Cloud, JSON, search by embeddings, your wine">
 
 Note:
-- First pass: the photo goes to a vision model, which returns the wines it finds
-- Each wine is matched by name against our catalog, then ranked by embeddings against your taste
+- The only difference with the list path: the photo goes to a vision model first, which returns the wines it finds
+- From there it's the same as before: match by name against the catalog, rank by cosine against your taste
 - Not a classic OCR: the model understands the structure of the list
 - Locally we ran `qwen2.5vl:7b` in Ollama, but the live version uses a cloud model through Ollama Cloud
 - Temperature 0 and a strict prompt: we want literal extraction, no invented wines
 - The prompt is always the same, only the image changes
+---
+**Building the chat model**
+```scala
+val chatModel = OpenAiChatModel.builder()
+  .baseUrl(cfg.url)
+  .apiKey(cfg.apiKey)
+  .modelName(cfg.model)
+  .temperature(0.0)
+  .responseFormat(WineNamesResponseFormat)
+  .build()
+```
+
+Note:
+- `OpenAiChatModel` because Ollama Cloud speaks the OpenAI API
+- Temperature 0: literal reading, no creativity
+- Provider `ollama` builds an `OllamaChatModel` with the same options; `openai` builds this one
+- `responseFormat` forces the answer to follow a JSON schema: two slides from now
 ---
 **Strict prompt + JSON out**
 ```text
@@ -397,43 +469,26 @@ Note:
 - The image text is treated as data: a wine list could contain "ignore the rules" (prompt injection)
 - If it doesn't parse, we fail with an error: no regex over free text
 ---
-**Copy-paste: the JSON schema**
+**The JSON schema**
 ```scala
 val wine = JsonObjectSchema.builder()
   .addStringProperty("winery").addStringProperty("cuvee")
   .addEnumProperty("colour", List("tinto", "blanco").asJava)
   .required("winery", "cuvee", "colour").build()
-
-val wines = JsonObjectSchema.builder()
-  .addProperty("wines",
-    JsonArraySchema.builder().items(wine).build())
-  .required("wines").build()
-
-val responseFormat = ResponseFormat.builder()
-  .`type`(ResponseFormatType.JSON)
-  .jsonSchema(JsonSchema.builder()
-    .name("WineList").rootElement(wines).build())
-  .build()
+// wrapped in {"wines": [...]} → ResponseFormat
 ```
 
 Note:
 - This is what goes into `.responseFormat(...)` when we build the chat model
 - The model can't answer with free text: it has to produce `{"wines":[...]}` with exactly these fields
 - The enum for the colour saves us from "Tinto", "red", "tinto crianza"...
-- Then `parser.decode[Menu](json)` with circe and we have typed data. Full version in `MenuOcr.scala` in the repo
+- Then `parser.decode[Menu](json)` with circe and we have typed data
+- Copy-paste version, with the array and the `ResponseFormat`, in `MenuOcr.scala` in the repo
 ---
 **Capping the image size**
 
-<img src="imgs/resize.svg" style="width:860px; margin:0" alt="A 4032 by 3024 phone photo is shrunk so its longest side is 1024 pixels, about 15 times fewer pixels">
+<img src="imgs/resize.svg" style="width:700px; margin:0" alt="A 4032 by 3024 phone photo is shrunk so its longest side is 1024 pixels, about 15 times fewer pixels">
 
-Note:
-- A full phone photo = a huge number of tokens for the vision model
-- We don't crop anything: we just set a maximum size (1024 px on the longest side, configurable)
-- Fewer tokens → faster, cheaper, and it fits the model's context
-- Some models have a resolution cliff where the cost jumps sharply
-- The image is also re-encoded as JPEG, fixing the EXIF orientation
----
-**In our code**
 ```scala
 val jpeg = ImmutableImage.loader()
   .fromBytes(imageBytes)
@@ -442,6 +497,11 @@ val jpeg = ImmutableImage.loader()
 ```
 
 Note:
+- A full phone photo = a huge number of tokens for the vision model
+- We don't crop anything: we just set a maximum size (1024 px on the longest side, configurable)
+- Fewer tokens → faster, cheaper, and it fits the model's context
+- Some models have a resolution cliff where the cost jumps sharply
+- The image is also re-encoded as JPEG, fixing the EXIF orientation
 - Real code (`ImageProcessor.resizeForVisionModel`), with scrimage
 - scrimage over raw ImageIO because it fixes the EXIF orientation of phone photos
 
@@ -459,6 +519,8 @@ Note:
 - Oracle Cloud Always Free ARM VM (2 OCPU, 12 GB): the only free tier that runs the whole stack
 - Everything is one docker compose; the bot needs no inbound connectivity (it polls Telegram)
 - The vision model is not on the VM: it goes to Ollama Cloud, so no GPU and no heavy model to pull
+- Swapping the vision provider is a config change (`CELLAR_LLM_CHAT_*`): Ollama Cloud, Groq, OpenAI...
+- A scraper runs on a schedule and adds the wines people asked for and we did not have
 - The small local Ollama only serves bge-m3, so the existing embeddings stay valid when the chat model changes. Changing the embedded text did need one re-embed (`POST /wines/reembed`)
 ---
 **How a deploy works**
@@ -472,33 +534,6 @@ Note:
 - Secrets live in a GitHub Environment and in `.env.secrets` on the VM: never in git
 - The API requires an API key and only the necessary ports are open
 - Gotcha: the SQL files in `databases/` only run on an empty volume, so schema changes are applied by hand
----
-**What the project depends on**
-
-<div class="cards"><div class="card"><span class="big">⚙️</span><b>Runtime</b>Scala 3 · cats-effect · http4s · smithy4s · doobie</div><div class="card"><span class="big">🤖</span><b>AI</b>langchain4j · Ollama · Ollama Cloud · scrimage</div><div class="card"><span class="big">🗄️</span><b>Data</b>Postgres + pgvector · Vivino via jsoup</div><div class="card"><span class="big">💬</span><b>Channel</b>Telegram bot (telegramium)</div><div class="card"><span class="big">☁️</span><b>Infra</b>Docker · GHCR · GitHub Actions · Oracle Cloud</div></div>
-
-Note:
-- Config with pureconfig, logs with log4cats
-- The scraper runs on a schedule on the VM and creates the wines people asked for and we did not have
-- Swapping the vision provider is a config change (`CELLAR_LLM_CHAT_*`): Ollama Cloud, Groq, OpenAI...
-
-
-
-### Demo
-<img src="https://media.giphy.com/media/ZS3WXURfBE3ew/giphy.gif" style="height:380px; margin:0" alt="Ratatouille: Anton Ego tastes the ratatouille and goes back to his childhood">
-
-Note:
-- Now that we've seen every piece, let's see them working together
-- Telegram bot: answer the taste questionnaire, then send a photo of a wine list → recommendation
-- Hopefully the audience reacts like Ego 🙂
----
-**Try it yourself**
-
-<div class="intro"><img src="imgs/telegram-qr.png" style="height:420px; margin:0" alt="Telegram QR code for @RiberiaBot"><ul class="plain"><li>💬 <a href="https://t.me/RiberiaBot">t.me/RiberiaBot</a></li><li>📝 Answer the taste questions</li><li>📸 Send a photo of a wine list</li><li>🍷 Get your pick</li></ul></div>
-
-Note:
-- Leave this up during the demo so people can scan it and follow along on their phones
-- Same flow I'm showing: questionnaire first, then a photo of a wine list
 
 
 
@@ -544,7 +579,6 @@ Note:
 - And keep learning: AI tools change every few months, and so does how we build software with them
 - Reading about AI *and* about software architecture is what lets you keep up: good design is what makes the AI's code reviewable and changeable
 - Which is why the next slide is where I learned all this
-
 ---
 **Where I learned it**
 
