@@ -22,15 +22,13 @@ Note:
 ---
 **What I built: Riberia, a Telegram bot**
 
-<p style="font-size:.55em; margin:10px 0">① <b>Your taste</b>: 6 questions, once &nbsp;→&nbsp; ② <b>from a list</b> or ③ <b>from a photo</b> &nbsp;→&nbsp; 🍷 <b>one pick</b></p>
-
-<div class="intro" style="gap:24px"><img src="imgs/telegram-profile.webp" style="height:360px; margin:0" alt="Telegram: the bot offers recommend from a list, from an image, or repeat the questionnaire, and asks question 1 of 6 about the wine type"><img src="imgs/telegram-photo.webp" style="height:360px; margin:0" alt="Telegram: the user sends a photo of a wine list and the bot recommends Remírez de Ganuza Rioja Reserva 2017, listing the wines it did not find in the cellar"></div>
+<div class="intro" style="gap:28px; align-items:flex-start"><div style="text-align:center"><img src="imgs/telegram-questions.jpg" style="height:440px; margin:0; border-radius:12px" alt="Telegram: the bot menu with recommend from a list, from an image or repeat the questionnaire, then questions 1 and 2 of 6 with buttons for wine type and sweetness"><p style="font-size:.5em; margin:6px 0 0">① <b>Your taste</b>: 6 questions, once</p></div><div style="text-align:center"><img src="imgs/telegram-profile.jpg" style="height:440px; margin:0; border-radius:12px" alt="Telegram: questions 5 and 6, profile created, and the two options: recommend from a list or from an image"><p style="font-size:.5em; margin:6px 0 0">② <b>Profile ready</b>: from a list or a photo</p></div><div style="text-align:center"><img src="imgs/telegram-photo.jpg" style="height:440px; margin:0; border-radius:12px" alt="Telegram: the user sends a photo of a wine list and the bot recommends Remírez de Ganuza Rioja Reserva 2017 with its description"><p style="font-size:.5em; margin:6px 0 0">③ <b>One pick</b> from the photo</p></div></div>
 
 Note:
 - One step you do once, then two ways to ask for a recommendation
-- ① Taste profile: 6 questions with buttons (type of wine, sweetness, flavours, body, tannins, occasion)
-- ② From a list: you write the names of the wines on the menu
-- ③ From a photo: you send a picture of the wine list and the bot reads it
+- ① Taste profile: 6 questions with buttons (type of wine, sweetness, flavours, body, tannins, occasion). No free text, just tapping
+- ② Once the profile exists, the bot offers two paths: "from a list" (you type the names of the wines on the menu) or "from an image"
+- ③ From a photo: you send a picture of the wine list, the bot reads it and answers with one wine and its description
 - Either way you get one wine, the one closest to your taste, and the wines on the list we don't know yet
 - Behind it: a catalogue of ~1000 wines that we add once, with their descriptions
 - We'll see it live at the end. First, how it works inside
