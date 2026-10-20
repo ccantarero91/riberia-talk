@@ -369,20 +369,19 @@ Note:
 ---
 **Removing the noise**
 
-<div class="cards"><div class="card"><span class="big">🍖</span><b>No pairing</b>"Beef, Lamb" was a third of every wine's text</div><div class="card"><span class="big">❓</span><b>No questions</b>the profile was mostly the same question text for everyone</div><div class="card hot"><span class="big">🍷</span><b>Colour is a filter</b><code style="font-size:1em">WHERE colour = …</code> first, then rank by cosine</div></div>
+<div class="cards"><div class="card"><span class="big">🍖</span><b>No pairing</b>"Beef, Lamb" was a third of every wine's text</div><div class="card"><span class="big">❓</span><b>No questions</b>the profile was mostly the same question text for everyone</div><div class="card hot"><span class="big">🍷</span><b>Colour is a filter</b>your colour first, then cosine</div></div>
 
 <table style="font-size:0.5em"><thead><tr><th></th><th>Before</th><th>After</th></tr></thead><tbody><tr><td>Profile: advantage of the colour it asked for</td><td>0.004 – 0.019</td><td><b>0.040 – 0.077</b></td></tr><tr><td>two whites</td><td>0.078</td><td>0.124</td></tr><tr><td>two reds</td><td>0.131</td><td>0.144</td></tr><tr><td>a white vs a red</td><td>0.230</td><td>0.249</td></tr></tbody></table>
 
 <small style="opacity:.7; font-size:.45em">mean <code>&lt;=&gt;</code> = 1 − cosine · lower = closer · we want the last row well above the two before it</small>
 
-<span style="font-size:.8em">Compare rankings and gaps, not absolute values</span>
-
 Note:
 - Three changes to what we embed:
   - **No pairing**: the questionnaire never asks about food, so "Beef, Lamb" was pure noise
   - **No questions**: every profile shared the same long question text; the answers were just a few words
-  - **Colour as a filter**: one word barely moves the vector, so colour is a plain `WHERE`, and the cosine only ranks inside it
+  - **Colour as a filter**: one word barely moves the vector, so colour becomes a filter before the search, and the cosine only ranks inside it
 - Reading the table (lower = closer):
+  - Compare rankings and gaps, not absolute values
   - **First row is the win**: how much closer each profile is to its own colour. 3 to 10 times more than before
   - **Last three rows**: distance between wines. We want white vs red well above the other two
 - **Honest part**: between wines it barely moved. bge-m3 keeps any two wine texts within ~0.1–0.4
@@ -401,6 +400,36 @@ Note:
 - **Odd one, Capellanía**: a white aged in oak that reads "structured", so it lands behind three reds for the white taste. The vector reads style, not just colour
 - And the colour filter would pick a white for the white taste anyway
 - (Pazo de Señoráns is not in the catalog: it goes to the wanted-wines backlog)
+- On top of this, the colour filter. Let's see the query again
+---
+**The query again, now with colour**
+
+```scala
+val onTheList = matchedByName(menu)     // wine ids
+val inColour  = onTheList.filter(colourOf(_) == preferred)
+val candidates =                         // narrow, never empty
+  if inColour.nonEmpty then inColour else onTheList
+```
+
+```sql
+SELECT ... FROM cellar.wines
+WHERE id IN (/* candidates */)
+ORDER BY embedding <=> $userTaste::vector
+LIMIT 1;
+```
+
+<p style="font-size:.55em">Question 1: 🍷 tinto · 🥂 blanco · 🌹 rosado · 🍾 espumoso → filter &nbsp;·&nbsp; ✨ ¡Sorpréndeme! → no filter</p>
+
+Note:
+- Same SQL as before: the cosine still decides. What changes is which ids go in
+- Colour comes from question 1 of the questionnaire, and all four types filter: tinto, blanco, rosado, espumoso. "¡Sorpréndeme!" means no filter
+- Narrow, never empty: if the list has no wine of your colour, we still recommend the closest one instead of answering "nothing"
+- It's done in Scala, over the wines already matched by name (`RecommendationResolver.inPreferredColour`), so the SQL stays the same
+- If asked "why not filter by every question?":
+  - Colour is categorical and stored as a column: a red for someone who asked for a white is simply wrong
+  - Sweetness, body, tannins, occasion are degrees, not yes/no, and we don't have them as columns: they only live in the description text. That's exactly what the embedding is good at
+  - A restaurant list is ~10 wines: stack four hard filters and you're left with nothing
+  - So: hard rule for what is binary, cosine for everything that is "more or less"
 - Next: where that list comes from when you send a photo
 
 
