@@ -68,7 +68,7 @@ Note:
 ---
 **What Riberia does, step by step**
 
-<table style="font-size:0.5em"><thead><tr><th></th><th>What happens</th><th>Model</th></tr></thead><tbody><tr><td>🍾 <b>Add a wine</b> <small style="opacity:.6">once</small></td><td>its description → vector → Postgres</td><td>embeddings</td></tr><tr><td>📝 <b>Your taste</b> <small style="opacity:.6">once</small></td><td>your 6 answers → vector</td><td>embeddings</td></tr><tr><td>🔎 <b>Retrieve</b></td><td>wines on the list, ranked by cosine to your taste</td><td>none, just SQL</td></tr><tr><td>⌨️ <b>From a list</b></td><td>the names are already text</td><td><b>no LLM needed</b></td></tr><tr><td>📸 <b>From a photo</b></td><td>a vision model reads the list into text</td><td><b>LLM</b>, only to read</td></tr><tr><td>✍️ <b>Generate</b></td><td>—</td><td>not used</td></tr></tbody></table>
+<table style="font-size:0.5em"><thead><tr><th></th><th>What happens</th><th>Model</th></tr></thead><tbody><tr><td>🍾 <b>Add a wine</b> <small style="opacity:.6">once</small></td><td>its description → vector → Postgres</td><td>embeddings</td></tr><tr><td>📝 <b>Your taste</b> <small style="opacity:.6">once</small></td><td>your 6 answers → vector</td><td>embeddings</td></tr><tr><td>🔎 <b>Retrieve / Recommend</b></td><td>wines on the list, ranked by cosine to your taste</td><td>none, just SQL</td></tr><tr><td>⌨️ <b>From a list</b></td><td>the names are already text</td><td><b>no LLM needed</b></td></tr><tr><td>📸 <b>From a photo</b></td><td>a vision model reads the list into text</td><td><b>LLM</b>, only to read</td></tr><tr><td>✍️ <b>Generate</b></td><td>—</td><td>not used</td></tr></tbody></table>
 
 Note:
 - Same pieces, now as the operations you saw in the screenshots
